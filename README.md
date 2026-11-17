@@ -1,6 +1,6 @@
-# Xtip Monitor
+# Odds Monitor (`oddsadapter`)
 
-A local dashboard of Pinnacle prematch prices from [PinnWire](https://pinnwire.com/docs.html), compared with MerkurXtip odds, for the top 5 leagues and the UEFA club competitions: Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, Europa League and Conference League.
+A local dashboard of Pinnacle prematch prices from [PinnWire](https://pinnwire.com/docs.html) (the source of truth), compared against any pluggable bookie adapter (with MerkurXtip as the built-in default), for football, basketball, tennis, ice hockey, MMA, and handball/volleyball.
 
 ## Run
 
@@ -12,14 +12,30 @@ cd frontend
 npm install
 npm run build
 cd ..
-python pinnwire_dashboard.py     # http://127.0.0.1:8070
+python pinnwire_dashboard.py                     # http://127.0.0.1:8070 (default: merkurxtip)
+python pinnwire_dashboard.py --bookie example    # switch bookie adapter
 ```
 
 Or run `start.bat` (Windows) / `./start.sh`. Both install missing dependencies, build the app and start the server.
 
 Enter a PinnWire API key in the app. It is saved to `data/pinnwire_config.json`; `PINNWIRE_API_KEY` overrides it. The key is sent only from the local server to pinnwire.com. Free trial keys are at https://pinnwire.com/#trial.
 
-Stop with `Ctrl+C`. Options: `--port 9000`, `--no-browser`.
+Stop with `Ctrl+C`. Options: `--port 9000`, `--no-browser`, `--bookie <name>`, `--bookie-module <module>`.
+
+## Bookie adapters
+
+Pinnacle (PinnWire) is always the reference book. The compared bookie is abstracted behind `BookieAdapter` in `bookie_adapter.py`:
+
+- **Select a bookie:** pass `--bookie <name>`, set `XTIP_BOOKIE=<name>`, or set `"bookie": "<name>"` in `data/pinnwire_config.json` (defaults to `merkurxtip`).
+- **Load external adapters:** pass `--bookie-module <mod>`, set `XTIP_BOOKIE_MODULES=mod1,mod2`, set `"bookie_modules": [...]` in `data/pinnwire_config.json`, or expose `[project.entry-points."xtip.bookies"]` from an installed package.
+- **Implement a new bookie:** start from `bookie_example.py`:
+  1. Subclass `bookie_adapter.BookieAdapter`, set `name`, `label`, `short`, and decorate with `@bookie_adapter.register_adapter`.
+  2. Implement `offer(sport)` returning normalized offer rows (`id`, `home`, `away`, `kickOffTime`, `live`, plus optional `leagueId`/`leagueShort`/`matchCode`/`sport`).
+  3. Implement `comp_id(sport, row)` for tracked-league sports (`football`, `basketball`, `hockey`).
+  4. Implement `decode_markets(sport, row, period=None)` using `bookie_adapter.empty_markets(sport)`.
+  5. Optionally implement `match(sport, match_id)` for fresh single-match odds in detail modals.
+
+The UI and `/api/status` + board payloads automatically display the active adapter's `label` and `short` code.
 
 ## Server (subdomain on Linux)
 
@@ -39,9 +55,9 @@ The service runs with `--no-browser`, so the CLV worker and the drop stream keep
 - **Detail panel:** click a match to see full match and 1st half: a probability bar, 1X2 with the opening price, all handicap and total lines (GL = main line), and team totals. `#<event id>` in the URL opens a match directly.
 - Fair odds remove the margin with the power method for three-way markets (1X2) and with Shin's method for two-way ones (handicaps, totals, winner in basketball). Power overshoots on lopsided two-way prices.
 
-## MerkurXtip comparison
+## Bookie comparison (default: MerkurXtip)
 
-The **MerkurXtip vs Pinnacle** view (default) compares the public MerkurXtip prematch offer with Pinnacle fair odds. No key is needed.
+The **&lt;Bookie&gt; vs Pinnacle** view (default) compares the active bookie's prematch offer with Pinnacle fair odds. No bookie key is needed.
 
 - **Difference** = MerkurXtip odds / Pinnacle fair odds − 1. Red (≥ 0%) means the MerkurXtip price is at or above the fair price. Amber means 0 to −2%.
 - **Board:** one row per match: kickoff, Pinnacle limit of the main line (handicap, else total), teams and league. Then 1X2 as Pinnacle no-vig, Pinnacle, and MerkurXtip. After that comes the same layout for goals (over/under). It shows the line both books price that is closest to Pinnacle's main line, because MerkurXtip only sells half-goal lines (ties go to the line whose Pinnacle prices are nearest to even). Unpaired matches show Pinnacle's main line. MerkurXtip cells are red when at or above the fair price and amber when above the Pinnacle price. They are outlined purple when the MerkurXtip price changed on the last refresh. Pinnacle cells are green when the price rose and blue when it fell on the last refresh. Filter by largest difference across all comparable markets, or show matches MerkurXtip does not offer.
@@ -62,7 +78,7 @@ The **MerkurXtip vs Pinnacle** view (default) compares the public MerkurXtip pre
 
 ## Install as an app (PWA)
 
-The dashboard is a Progressive Web App. In Chrome or Edge, open http://127.0.0.1:8070 and click **⤓ Instaliraj** in the top bar, or use the install icon in the address bar. It then runs in its own window, with a Start-menu or desktop icon. Right-clicking the icon gives the shortcuts **Value** and **MerkurXtip vs Pinnacle**.
+The dashboard is a Progressive Web App. In Chrome or Edge, open http://127.0.0.1:8070 and click **⤓ Instaliraj** in the top bar, or use the install icon in the address bar. It then runs in its own window, with a Start-menu or desktop icon. Right-clicking the icon gives the shortcuts **Value** and **Poređenje vs Pinnacle**.
 
 - The Python server must still be running; the PWA is a window onto it. `start.bat` can be added to Windows startup.
 - **Offline / server down:** the app still opens from the service worker cache and shows the last odds it loaded, with a banner saying they are not live. The page retries by itself and picks up live odds again once the server is back.
@@ -108,7 +124,9 @@ The last column of every Value table (each sport and the all-sports screen) mark
 | File | Purpose |
 |---|---|
 | `pinnwire_dashboard.py` | Local server on port 8070: competition filter, delta merge, price history, `/api/board`, `/api/match/<id>`, static files |
-| `merkur_client.py` | MerkurXtip offer client, odds-code decoding and event pairing |
+| `bookie_adapter.py` | `BookieAdapter` interface, adapter registry, external loader, and default `MerkurAdapter` |
+| `bookie_example.py` | Starter template (`ExampleBookieAdapter`) for implementing a new bookie |
+| `merkur_client.py` | Default MerkurXtip offer client, odds-code decoding and shared event pairing |
 | `football_competitions.py` | Football leagues that are compared (`COMPETITIONS`) and leagues never listed as missing |
 | `common.py` | What every sport shares: snapshot state (fetching, delta merging), compare rows, value items, time helpers |
 | `pinnwire_client.py` | PinnWire REST client (`x-api-key`, 429/Retry-After handling), devig and market parsing |
