@@ -101,16 +101,24 @@ def current_api_key():
     return os.environ.get("PINNWIRE_API_KEY") or load_config().get("api_key", "")
 
 
-def save_api_key(api_key):
-    if not api_key or not api_key.strip():
-        raise ValueError("API ključ ne može biti prazan.")
+def _save_config(updates):
     os.makedirs(DATA, exist_ok=True)
     config = load_config()
-    config["api_key"] = api_key.strip()
+    config.update(updates)
     temp_path = CONFIG_PATH + ".tmp"
     with open(temp_path, "w", encoding="utf-8") as config_file:
         json.dump(config, config_file, ensure_ascii=False, indent=2)
     os.replace(temp_path, CONFIG_PATH)
+
+
+def save_api_key(api_key):
+    if not api_key or not api_key.strip():
+        raise ValueError("API ključ ne može biti prazan.")
+    _save_config({"api_key": api_key.strip()})
+
+
+def save_bookie(bookie_name):
+    _save_config({"bookie": bookie_name})
 
 
 def is_tracked(event):
@@ -1004,7 +1012,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/status":
                 return self.send_json(200, {"apiKeySet": bool(current_api_key()),
                                             "callsToday": STATE.history.calls_today(),
-                                            "bookie": STATE.bookie.meta()})
+                                            "bookie": STATE.bookie.meta(),
+                                            "bookies": bookie_adapter.adapter_catalog()})
             if path == "/api/clv":
                 return self.send_json(200, clv_response(query))
             if path == "/api/history":
@@ -1045,7 +1054,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
-        if path not in ("/api/config", "/api/marks"):
+        if path not in ("/api/config", "/api/marks", "/api/bookie"):
             return self.send_error_json(404, "Ruta nije pronađena.")
         # a JSON body needs a CORS preflight, which this server never grants, so another site open in the
         # browser cannot post a form or text/plain body here and replace the API key
@@ -1062,6 +1071,14 @@ class Handler(BaseHTTPRequestHandler):
                 # the basic-auth user, set by the reverse proxy (deploy/Caddyfile, deploy/nginx.conf)
                 user = self.headers.get("X-Remote-User", "")
                 return self.send_json(200, {"mark": marks_store().set(body, SPORT_STATES, user=user)})
+            if path == "/api/bookie":
+                name = str(body.get("bookie") or "").strip()
+                if not name:
+                    raise ValueError("Kladionica nije izabrana.")
+                active = set_active_bookie(name)
+                save_bookie(active.name)
+                log.info("Kladionica je promenjena: %s", active.label)
+                return self.send_json(200, {"bookie": active.meta()})
             save_api_key(body.get("apiKey", ""))
             log.info("API ključ je promenjen")
             for state in SPORT_STATES.values():

@@ -80,6 +80,8 @@ export default function App() {
   const [sport, setSport] = useState(initialSport);
   const [board, setBoard] = useState(null);
   const [bookie, setBookie] = useState(DEFAULT_BOOKIE);
+  const [bookies, setBookies] = useState([]);
+  const [switchingBookie, setSwitchingBookie] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [, setCallsToday] = useState(0);
@@ -156,6 +158,23 @@ export default function App() {
     [loadBoard, bbLoad, tnLoad, hkLoad, mmLoad, hbLoad],
   );
   const reload = allValue ? reloadAll : pane ? pane.load : loadBoard;
+  const switchBookie = useCallback(async (name) => {
+    setSwitchingBookie(true);
+    setError("");
+    try {
+      const res = await requestJson("/api/bookie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookie: name }),
+      });
+      if (res.bookie) setBookie(res.bookie);
+      if (apiKeySet) await reloadAll();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSwitchingBookie(false);
+    }
+  }, [apiKeySet, reloadAll]);
   const cur = pane ? pane.board : board;
   const curLoading = allValue ? loading || bb.loading || tn.loading || hk.loading || mm.loading || hb.loading
     : pane ? pane.loading : loading;
@@ -208,6 +227,8 @@ export default function App() {
         setError("");
         setApiKeySet(status.apiKeySet);
         setCallsToday(status.callsToday);
+        if (status.bookie) setBookie(status.bookie);
+        if (status.bookies) setBookies(status.bookies);
       })
       .catch((err) => {
         if (stopped) return;
@@ -438,6 +459,18 @@ export default function App() {
             <button type="button" className="button ghost" onClick={pwa.install} title="Instaliraj Odds Monitor kao aplikaciju">
               ⤓ Instaliraj
             </button>
+          )}
+          {bookies.length > 1 && (
+            <label className="auto" title="Izaberi kladionicu za poređenje">
+              Kladionica
+              <select
+                value={activeBookie.name}
+                disabled={switchingBookie}
+                onChange={(e) => switchBookie(e.target.value)}
+              >
+                {bookies.map((b) => <option key={b.name} value={b.name}>{b.label}</option>)}
+              </select>
+            </label>
           )}
           <label className="auto">
             Auto

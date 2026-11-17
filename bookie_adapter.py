@@ -75,6 +75,7 @@ class BookieAdapter:
     label = "Bookie"
     short = "BK"
     pair_by_comp = False
+    selectable = True
 
     def meta(self):
         return {"name": self.name, "label": self.label, "short": self.short or self.label[:3].upper()}
@@ -120,6 +121,15 @@ def list_adapters():
     for cls in ADAPTERS.values():
         seen[cls.name] = cls
     return sorted(seen)
+
+
+def adapter_catalog():
+    """Metadata list `[{name, label, short}]` of selectable adapters for the UI dropdown."""
+    seen = {}
+    for cls in ADAPTERS.values():
+        if getattr(cls, "selectable", True) and cls.name not in seen:
+            seen[cls.name] = {"name": cls.name, "label": cls.label, "short": cls.short or cls.label[:3].upper()}
+    return list(seen.values())
 
 
 def load_external_adapters(modules=None, config_loader=None):
@@ -245,4 +255,24 @@ class MaxBetAdapter(FeedBookieAdapter):
     label = "MaxBet"
     short = "MB"
     base = "https://www.maxbet.rs"
+
+
+def register_feed_bookie(name, label, short, base, aliases=()):
+    """Register a bookie using the shared JSON feed format."""
+    cls = type(
+        f"{name.title()}FeedAdapter",
+        (FeedBookieAdapter,),
+        {"name": name, "label": label, "short": short, "base": base, "aliases": tuple(aliases)},
+    )
+    return register_adapter(cls)
+
+
+for _name, _label, _short, _base, _aliases in (
+    ("merkurxtip", "MerkurXtip", "MX", "https://www.merkurxtip.rs", ("mx",)),
+    ("oktagon", "OktagonBet", "OK", "https://www.oktagonbet.com", ("oktagonbet",)),
+    ("betole", "BetOle", "BO", "https://www.betole.com", ()),
+    ("brazilbet", "BrazilBet", "BB", "https://www.brazilbet.rs", ()),
+    ("soccerbet", "SoccerBet", "SB", "https://www.soccerbet.rs", ("soccer",)),
+):
+    register_feed_bookie(_name, _label, _short, _base, _aliases)
 

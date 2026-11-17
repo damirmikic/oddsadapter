@@ -1912,6 +1912,10 @@ class BookieAdapterTests(unittest.TestCase):
             bookie_adapter.get_adapter(config_loader=lambda: {"bookie": "example"}),
             bookie_example.ExampleBookieAdapter,
         )
+        self.assertEqual(
+            {b["name"] for b in bookie_adapter.adapter_catalog()},
+            {"maxbet", "merkurxtip", "oktagon", "betole", "brazilbet", "soccerbet"},
+        )
         with mock.patch.dict(os.environ, {"ODDS_BOOKIE": "example"}):
             self.assertIsInstance(bookie_adapter.get_adapter(), bookie_example.ExampleBookieAdapter)
         with self.assertRaises(ValueError):
