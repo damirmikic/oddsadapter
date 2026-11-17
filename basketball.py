@@ -10,7 +10,8 @@ import functools
 from statistics import NormalDist
 
 import common
-import merkur_client as mx
+import bookie_adapter
+import bookie_client as mx
 import pinnwire_client as pw
 from common import event_ts, merge_event  # noqa: F401 (tennis and hockey use them through this module)
 
@@ -525,7 +526,7 @@ class BasketballState(common.SnapshotState):
         return True
 
     def comp_id(self, row):
-        if self.bookie.name == "merkurxtip":
+        if isinstance(self.bookie, bookie_adapter.FeedBookieAdapter):
             return self.mx_comp.get(row.get("leagueId"))
         return self.bookie.comp_id(self.clv_name, row)
 

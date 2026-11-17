@@ -19,7 +19,7 @@ import re
 
 import basketball as bb
 import common
-import merkur_client as mx
+import bookie_client as mx
 import pinnwire_client as pw
 
 SPORT_ID = 10
@@ -244,8 +244,8 @@ def competition(league_id, name, sport=HANDBALL):
 class JoinedAPI:
     """MerkurAPI over both offers: handball and volleyball rows in one list (each row carries its `sport`)."""
 
-    def __init__(self):
-        self.apis = [mx.MerkurAPI(offer_path=path) for path in OFFER_PATHS]
+    def __init__(self, base=mx.BASE, label="Bookie"):
+        self.apis = [mx.BookieAPI(offer_path=path, base=base, label=label) for path in OFFER_PATHS]
 
     def offer(self):
         rows, errors = [], []

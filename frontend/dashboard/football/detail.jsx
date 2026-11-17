@@ -5,7 +5,7 @@ import { clockFmt, dayLabel, evClass, fmtEv, fmtLimit, fmtLine, fmtMargins, fmtO
 import { CompBadge, DerivedTag, KickoffWarning, ML_SIDES, Price, useBookie } from "../ui.jsx";
 import { PriceChart, Sparkline, histKey, usePriceHistory } from "../priceHistory.jsx";
 
-function MerkurComparison({ merkur, periodKey, home, away, history }) {
+function BookieComparison({ merkur, periodKey, home, away, history }) {
   const { label, short } = useBookie();
   const [open, setOpen] = useState("");
   if (!merkur) {
@@ -215,7 +215,7 @@ export function DetailPanel({ matchId, boardMatch, competition, onClose, onCalls
       {!detail && loading && <p className="state">Učitavam kvote…</p>}
 
       {detail && (
-        <MerkurComparison merkur={detail.merkur} periodKey={periodKey} home={match.home} away={match.away} history={history} />
+        <BookieComparison merkur={detail.merkur} periodKey={periodKey} home={match.home} away={match.away} history={history} />
       )}
 
       {period && !period.ml && <p className="state">Pinnacle nema ponudu za ovaj period.</p>}
@@ -334,7 +334,7 @@ export function OddsModal({ matchId, boardMatch, onClose, onCalls }) {
         {error && <p className="state error" role="alert">{error}</p>}
         {!detail && !error && <p className="state">Učitavam kvote…</p>}
         {detail && (
-          <MerkurComparison merkur={detail.merkur} periodKey={periodKey} home={match.home} away={match.away} history={history} />
+          <BookieComparison merkur={detail.merkur} periodKey={periodKey} home={match.home} away={match.away} history={history} />
         )}
       </div>
     </div>

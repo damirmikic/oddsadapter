@@ -29,7 +29,7 @@ import clv
 import common
 import handball
 import hockey
-import merkur_client as mx
+import bookie_client as mx
 import mma
 import pinnwire_client as pw
 import price_history
@@ -506,7 +506,7 @@ class DashboardState(common.SnapshotState):
         self.other_cache = None  # (offer, signature, unpaired ids, hints, offered) of leagues outside COMPETITIONS
 
     def comp_id(self, row):
-        if self.bookie.name == "merkurxtip":
+        if isinstance(self.bookie, bookie_adapter.FeedBookieAdapter):
             return merkur_comp(row)
         return self.bookie.comp_id("football", row)
 
@@ -801,7 +801,7 @@ for _sport, _state in SPORT_STATES.items():
 
 
 def set_active_bookie(name=None, modules=None):
-    """Select the active bookie adapter (explicit name -> XTIP_BOOKIE -> config -> merkurxtip) on all states."""
+    """Select the active bookie adapter (explicit name -> ODDS_BOOKIE -> config -> maxbet) on all states."""
     bookie = bookie_adapter.get_adapter(name, load_config, modules=modules)
     for state in SPORT_STATES.values():
         state.set_bookie(bookie)

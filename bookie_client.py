@@ -23,7 +23,7 @@ import unicodedata
 
 import requests
 
-BASE = "https://www.merkurxtip.rs"
+BASE = "https://www.maxbet.rs"
 OFFER_PATH = "/restapi/custom/offer/sr/sport/S/mob"
 MATCH_PATH = "/restapi/offer/sr/match/{id}"
 HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
@@ -66,26 +66,28 @@ EURO_HANDICAPS = {"hd2": ("201", "203"), "handicap2": ("421", "423"), "handicap3
 HT_EURO_HANDICAPS = {"hdp": ("224", "226")}
 
 
-class MerkurAPI:
-    def __init__(self, timeout=30, offer_path=OFFER_PATH):
+class BookieAPI:
+    def __init__(self, timeout=30, offer_path=OFFER_PATH, base=BASE, label="Bookie"):
         self.offer_path = offer_path
+        self.base = base.rstrip("/")
+        self.label = label
         self.s = requests.Session()
         self.s.headers.update(HEADERS)
         self.timeout = timeout
 
     def _get(self, path, **params):
         try:
-            r = self.s.get(f"{BASE}{path}", params=params, timeout=self.timeout)
+            r = self.s.get(f"{self.base}{path}", params=params, timeout=self.timeout)
         except requests.RequestException as exc:
-            raise RuntimeError(f"MerkurXtip nije dostupan: {exc}") from exc
+            raise RuntimeError(f"{self.label} nije dostupan: {exc}") from exc
         if r.status_code == 404:
-            raise LookupError("MerkurXtip nema ovaj meč.")
+            raise LookupError(f"{self.label} nema ovaj meč.")
         if r.status_code != 200:
-            raise RuntimeError(f"MerkurXtip {path} -> HTTP {r.status_code}")
+            raise RuntimeError(f"{self.label} {path} -> HTTP {r.status_code}")
         try:
             return r.json()
         except ValueError as exc:
-            raise RuntimeError("MerkurXtip je vratio neispravan JSON.") from exc
+            raise RuntimeError(f"{self.label} je vratio neispravan JSON.") from exc
 
     def offer(self):
         data = self._get(self.offer_path, annex=0)
@@ -94,7 +96,7 @@ class MerkurAPI:
     def match(self, match_id):
         data = self._get(MATCH_PATH.format(id=match_id), annex=0, locale="sr")
         if not isinstance(data, dict) or not data.get("odds"):
-            raise LookupError("MerkurXtip nema kvote za ovaj meč.")
+            raise LookupError(f"{self.label} nema kvote za ovaj meč.")
         return data
 
 
@@ -357,7 +359,7 @@ class OfferCache:
     """Offer list kept for `ttl` seconds; one fetch at a time."""
 
     def __init__(self, api=None, ttl=60):
-        self.api = api or MerkurAPI()
+        self.api = api or BookieAPI()
         self.ttl = ttl
         self.rows = None
         self.at = 0.0

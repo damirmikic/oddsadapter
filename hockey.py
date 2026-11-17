@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import basketball as bb
 import common
-import merkur_client as mx
+import bookie_client as mx
 import pinnwire_client as pw
 
 SPORT_ID = 4

@@ -14,7 +14,7 @@ import unicodedata
 from datetime import datetime, timezone
 
 import bookie_adapter
-import merkur_client as mx
+import bookie_client as mx
 import pinnwire_client as pw
 
 log = logging.getLogger("xtip.snapshot")
@@ -261,7 +261,7 @@ class SnapshotState:
         self.key_fn = key_fn
         self.lock = threading.Lock()
         self.fetch_lock = threading.Lock()
-        self.bookie = bookie or bookie_adapter.MerkurAdapter()
+        self.bookie = bookie or bookie_adapter.MaxBetAdapter()
         self._custom_merkur = merkur is not None
         self.merkur = merkur or mx.OfferCache(self.bookie.sport_api(self.clv_name))
         self.merkur_lock = threading.Lock()

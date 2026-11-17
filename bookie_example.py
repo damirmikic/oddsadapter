@@ -4,7 +4,7 @@ To add your own bookie:
 1. Copy this file (e.g. `mozzart_adapter.py`) and import it in `pinnwire_dashboard.py` (or `bookie_adapter.py`).
 2. Subclass `BookieAdapter`, set `name` and `label`, and decorate with `@register_adapter`.
 3. Implement `offer(sport)`, `comp_id(sport, row)` (for football/basketball/hockey), and `decode_markets(sport, row, period)`.
-4. Run with `python pinnwire_dashboard.py --bookie <name>` (or set `XTIP_BOOKIE=<name>` / `"bookie"` in config).
+4. Run with `python pinnwire_dashboard.py --bookie <name>` (or set `ODDS_BOOKIE=<name>` / `"bookie"` in config).
 """
 from __future__ import annotations
 

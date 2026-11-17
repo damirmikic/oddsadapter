@@ -13,7 +13,7 @@ import importlib.metadata
 import os
 import time
 
-import merkur_client as mx
+import bookie_client as mx
 
 SPORTS = ("football", "basketball", "tennis", "hockey", "mma", "handball")
 
@@ -122,9 +122,9 @@ def list_adapters():
 
 
 def load_external_adapters(modules=None, config_loader=None):
-    """Load external bookie adapters from modules, `XTIP_BOOKIE_MODULES`, config, and `xtip.bookies` entry points."""
+    """Load external bookie adapters from modules, `ODDS_BOOKIE_MODULES`, config, and `odds.bookies` entry points."""
     names = list(modules or ())
-    env_mods = os.environ.get("XTIP_BOOKIE_MODULES", "")
+    env_mods = os.environ.get("ODDS_BOOKIE_MODULES", "")
     if env_mods:
         names.extend(m.strip() for m in env_mods.split(",") if m.strip())
     if config_loader is not None:
@@ -132,19 +132,19 @@ def load_external_adapters(modules=None, config_loader=None):
         names.extend(cfg_mods)
     for mod_name in names:
         importlib.import_module(mod_name)
-    for ep in importlib.metadata.entry_points(group="xtip.bookies"):
+    for ep in importlib.metadata.entry_points(group="odds.bookies"):
         loaded = ep.load()
         if isinstance(loaded, type) and issubclass(loaded, BookieAdapter):
             register_adapter(loaded)
 
 
 def get_adapter(name=None, config_loader=None, modules=None):
-    """Instantiate the active `BookieAdapter` (explicit name -> `XTIP_BOOKIE` -> config -> merkurxtip)."""
+    """Instantiate the active `BookieAdapter` (explicit name -> `ODDS_BOOKIE` -> config -> maxbet)."""
     load_external_adapters(modules=modules, config_loader=config_loader)
-    chosen = name or os.environ.get("XTIP_BOOKIE")
+    chosen = name or os.environ.get("ODDS_BOOKIE")
     if not chosen and config_loader is not None:
         chosen = (config_loader() or {}).get("bookie")
-    key = (chosen or "merkurxtip").strip().lower()
+    key = (chosen or "maxbet").strip().lower()
     cls = ADAPTERS.get(key)
     if cls is None:
         available = ", ".join(list_adapters())
@@ -152,14 +152,13 @@ def get_adapter(name=None, config_loader=None, modules=None):
     return cls()
 
 
-@register_adapter
-class MerkurAdapter(BookieAdapter):
-    """Default adapter backed by MerkurXtip (`merkur_client.py` and per-sport code tables)."""
+class FeedBookieAdapter(BookieAdapter):
+    """Base adapter for NSoft-style JSON feeds (`bookie_client.py` and per-sport code tables)."""
 
-    name = "merkurxtip"
-    aliases = ("merkur", "mx")
-    label = "MerkurXtip"
-    short = "MX"
+    name = "feed"
+    label = "Bookie"
+    short = "BK"
+    base = mx.BASE
 
     _OFFER_PATHS = {
         "football": mx.OFFER_PATH,
@@ -177,12 +176,12 @@ class MerkurAdapter(BookieAdapter):
             if sport == "handball":
                 import handball
 
-                self._apis[sport] = handball.JoinedAPI()
+                self._apis[sport] = handball.JoinedAPI(base=self.base, label=self.label)
             else:
                 path = self._OFFER_PATHS.get(sport)
                 if path is None:
-                    raise ValueError(f"MerkurXtip ne podržava sport: {sport!r}")
-                self._apis[sport] = mx.MerkurAPI(offer_path=path)
+                    raise ValueError(f"{self.label} ne podržava sport: {sport!r}")
+                self._apis[sport] = mx.BookieAPI(offer_path=path, base=self.base, label=self.label)
         return self._apis[sport]
 
     def offer(self, sport):
@@ -233,5 +232,16 @@ class MerkurAdapter(BookieAdapter):
             import handball
 
             return handball.merkur_markets(row, period or "ft")
-        raise ValueError(f"MerkurXtip ne podržava sport: {sport!r}")
+        raise ValueError(f"{self.label} ne podržava sport: {sport!r}")
+
+
+@register_adapter
+class MaxBetAdapter(FeedBookieAdapter):
+    """Default MaxBet adapter (`maxbet.rs`)."""
+
+    name = "maxbet"
+    aliases = ("mb",)
+    label = "MaxBet"
+    short = "MB"
+    base = "https://www.maxbet.rs"
 

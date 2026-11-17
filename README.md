@@ -12,7 +12,7 @@ cd frontend
 npm install
 npm run build
 cd ..
-python pinnwire_dashboard.py                     # http://127.0.0.1:8070 (default: merkurxtip)
+python pinnwire_dashboard.py                     # http://127.0.0.1:8070 (default: maxbet)
 python pinnwire_dashboard.py --bookie example    # switch bookie adapter
 ```
 
@@ -26,8 +26,8 @@ Stop with `Ctrl+C`. Options: `--port 9000`, `--no-browser`, `--bookie <name>`, `
 
 Pinnacle (PinnWire) is always the reference book. The compared bookie is abstracted behind `BookieAdapter` in `bookie_adapter.py`:
 
-- **Select a bookie:** pass `--bookie <name>`, set `XTIP_BOOKIE=<name>`, or set `"bookie": "<name>"` in `data/pinnwire_config.json` (defaults to `merkurxtip`).
-- **Load external adapters:** pass `--bookie-module <mod>`, set `XTIP_BOOKIE_MODULES=mod1,mod2`, set `"bookie_modules": [...]` in `data/pinnwire_config.json`, or expose `[project.entry-points."xtip.bookies"]` from an installed package.
+- **Select a bookie:** pass `--bookie <name>`, set `ODDS_BOOKIE=<name>`, or set `"bookie": "<name>"` in `data/pinnwire_config.json` (defaults to `maxbet`).
+- **Load external adapters:** pass `--bookie-module <mod>`, set `ODDS_BOOKIE_MODULES=mod1,mod2`, set `"bookie_modules": [...]` in `data/pinnwire_config.json`, or expose `[project.entry-points."odds.bookies"]` from an installed package.
 - **Implement a new bookie:** start from `bookie_example.py`:
   1. Subclass `bookie_adapter.BookieAdapter`, set `name`, `label`, `short`, and decorate with `@bookie_adapter.register_adapter`.
   2. Implement `offer(sport)` returning normalized offer rows (`id`, `home`, `away`, `kickOffTime`, `live`, plus optional `leagueId`/`leagueShort`/`matchCode`/`sport`).
@@ -124,9 +124,9 @@ The last column of every Value table (each sport and the all-sports screen) mark
 | File | Purpose |
 |---|---|
 | `pinnwire_dashboard.py` | Local server on port 8070: competition filter, delta merge, price history, `/api/board`, `/api/match/<id>`, static files |
-| `bookie_adapter.py` | `BookieAdapter` interface, adapter registry, external loader, and default `MerkurAdapter` |
+| `bookie_adapter.py` | `BookieAdapter` interface, adapter registry, external loader, `FeedBookieAdapter`, and `MaxBetAdapter` |
 | `bookie_example.py` | Starter template (`ExampleBookieAdapter`) for implementing a new bookie |
-| `merkur_client.py` | Default MerkurXtip offer client, odds-code decoding and shared event pairing |
+| `bookie_client.py` | Default JSON feed client (`BookieAPI`), odds-code decoding and shared event pairing |
 | `football_competitions.py` | Football leagues that are compared (`COMPETITIONS`) and leagues never listed as missing |
 | `common.py` | What every sport shares: snapshot state (fetching, delta merging), compare rows, value items, time helpers |
 | `pinnwire_client.py` | PinnWire REST client (`x-api-key`, 429/Retry-After handling), devig and market parsing |

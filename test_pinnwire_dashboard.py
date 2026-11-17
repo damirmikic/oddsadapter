@@ -21,7 +21,7 @@ import clv
 import common
 import handball
 import hockey
-import merkur_client as mx
+import bookie_client as mx
 import mma
 import pinnwire_client as pw
 import pinnwire_dashboard as dash
@@ -1902,14 +1902,17 @@ class CleanHandicapTests(unittest.TestCase):
 
 class BookieAdapterTests(unittest.TestCase):
     def test_registry_defaults_and_selection(self):
-        self.assertIsInstance(bookie_adapter.get_adapter(), bookie_adapter.MerkurAdapter)
-        self.assertIsInstance(bookie_adapter.get_adapter("merkur"), bookie_adapter.MerkurAdapter)
+        self.assertIsInstance(bookie_adapter.get_adapter(), bookie_adapter.MaxBetAdapter)
+        maxbet = bookie_adapter.get_adapter("maxbet")
+        self.assertIsInstance(maxbet, bookie_adapter.MaxBetAdapter)
+        self.assertEqual((maxbet.label, maxbet.short, maxbet._api("football").base),
+                         ("MaxBet", "MB", "https://www.maxbet.rs"))
         self.assertIsInstance(bookie_adapter.get_adapter("example"), bookie_example.ExampleBookieAdapter)
         self.assertIsInstance(
             bookie_adapter.get_adapter(config_loader=lambda: {"bookie": "example"}),
             bookie_example.ExampleBookieAdapter,
         )
-        with mock.patch.dict(os.environ, {"XTIP_BOOKIE": "example"}):
+        with mock.patch.dict(os.environ, {"ODDS_BOOKIE": "example"}):
             self.assertIsInstance(bookie_adapter.get_adapter(), bookie_example.ExampleBookieAdapter)
         with self.assertRaises(ValueError):
             bookie_adapter.get_adapter("unknown-bookie")
