@@ -95,7 +95,7 @@ class BookieAPI:
 
     def match(self, match_id):
         data = self._get(MATCH_PATH.format(id=match_id), annex=0, locale="sr")
-        if not isinstance(data, dict) or not data.get("odds"):
+        if not isinstance(data, dict) or not (data.get("odds") or data.get("betMap")):
             raise LookupError(f"{self.label} nema kvote za ovaj meč.")
         return data
 
@@ -121,6 +121,49 @@ def _pick(raw, codes):
     """{side: code} -> {side: odds}, only when every side is priced."""
     out = {side: _odds(raw, code) for side, code in codes.items()}
     return out if all(out.values()) else None
+
+
+def _bm_odds(entry):
+    if not isinstance(entry, dict) or entry.get("s") == "L":
+        return None
+    try:
+        value = float(entry.get("ov"))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 1.0 else None
+
+
+def betmap_pick(bet_map, codes):
+    """{side: code} -> {side: odds} from a SoccerBet-style `betMap` (`NULL` special value)."""
+    out = {side: _bm_odds((bet_map.get(code) or {}).get("NULL")) for side, code in codes.items()}
+    return out if all(out.values()) else None
+
+
+def _sv_line(sv):
+    if not sv or sv == "NULL":
+        return None
+    _, _, val = str(sv).partition("=")
+    try:
+        return float(val or sv)
+    except ValueError:
+        return None
+
+
+def betmap_lines(bet_map, sets, sides, allowed=None):
+    """Decode parameterized lines from a `betMap` (`{"50430": {"hcp=-4.5": {"ov": 1.85}}}`)."""
+    out = {}
+    for _, first, second in sets:
+        left, right = bet_map.get(first) or {}, bet_map.get(second) or {}
+        for sv in left:
+            if sv not in right:
+                continue
+            line = _sv_line(sv)
+            if line is None or (allowed and not allowed(line)):
+                continue
+            p1, p2 = _bm_odds(left[sv]), _bm_odds(right[sv])
+            if p1 and p2 and line not in out:
+                out[line] = {sides[0]: p1, sides[1]: p2}
+    return out
 
 
 def _param_line(params, key):
