@@ -1,7 +1,7 @@
 {
-  "name": "Xtip Monitor",
-  "short_name": "Xtip Monitor",
-  "description": "Pinnacle i MerkurXtip kvote za top 5 liga i UEFA takmičenja: fer kvote, poređenje i value.",
+  "name": "Odds Monitor",
+  "short_name": "Odds Monitor",
+  "description": "Pinnacle poređenje kvota: fer kvote, poređenje i value.",
   "lang": "sr",
   "id": "/",
   "start_url": "/",
@@ -22,12 +22,12 @@
     {
       "name": "Value",
       "short_name": "Value",
-      "description": "Ishodi gde je MerkurXtip iznad Pinnacle fer kvote",
+      "description": "Ishodi gde je kladionica iznad Pinnacle fer kvote",
       "url": "/?view=value",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "MerkurXtip vs Pinnacle",
+      "name": "Poređenje vs Pinnacle",
       "short_name": "Poređenje",
       "url": "/?view=compare",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]

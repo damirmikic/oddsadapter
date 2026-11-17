@@ -74,6 +74,7 @@ class BookieAdapter:
     aliases = ()
     label = "Bookie"
     short = "BK"
+    pair_by_comp = False
 
     def meta(self):
         return {"name": self.name, "label": self.label, "short": self.short or self.label[:3].upper()}

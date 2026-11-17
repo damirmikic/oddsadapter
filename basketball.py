@@ -390,30 +390,33 @@ def swapped_entries(base, row):
             {**base, "home": row.get("away", ""), "away": row.get("home", ""), "row": {**row, SWAPPED: True}}]
 
 
-def pair_inputs(events, offer, mx_comp=MX_COMP, comp_fn=None, is_prematch=mx.is_prematch):
+def pair_inputs(events, offer, mx_comp=MX_COMP, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
     comp_fn = comp_fn or (lambda r: mx_comp.get(r.get("leagueId")))
-    pin = [{"id": str(e["event_id"]), "comp": e["league_id"], "home": e.get("home", ""),
+    pin = [{"id": str(e["event_id"]), "comp": e["league_id"] if by_comp else "*", "home": e.get("home", ""),
             "away": e.get("away", ""), "ts": event_ts(e)} for e in events]
     mer = []
     for r in offer:
         if not is_prematch(r):
             continue
-        comp = comp_fn(r)
+        comp = comp_fn(r) if by_comp else "*"
         if comp is None:
             continue
         mer.extend(swapped_entries({"id": r["id"], "comp": comp, "ts": r.get("kickOffTime") or 0}, r))
     return pin, mer
 
 
-def pair_events(events, offer, mx_comp=MX_COMP, score_fn=None, comp_fn=None, is_prematch=mx.is_prematch):
-    pin, mer = pair_inputs(events, offer, mx_comp, comp_fn=comp_fn, is_prematch=is_prematch)
-    return {pid: (m["row"], score) for pid, (m, score) in mx.pair(pin, mer, score_fn=score_fn).items()}
+def pair_events(events, offer, mx_comp=MX_COMP, score_fn=None, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
+    pin, mer = pair_inputs(events, offer, mx_comp, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
+    min_score = 0.5 if by_comp else common.OTHER_MIN_SCORE
+    score = score_fn if by_comp else (score_fn or common.other_score)
+    return {pid: (m["row"], s) for pid, (m, s) in mx.pair(pin, mer, min_score=min_score, score_fn=score).items()}
 
 
-def unpaired_hints(events, offer, pairs, mx_comp=MX_COMP, score_fn=None, comp_fn=None, is_prematch=mx.is_prematch):
+def unpaired_hints(events, offer, pairs, mx_comp=MX_COMP, score_fn=None, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
     """{pinnacle id: closest unused MerkurXtip offer row} for events without a pair, for the "missing" view."""
-    pin, mer = pair_inputs(events, offer, mx_comp, comp_fn=comp_fn, is_prematch=is_prematch)
-    return mx.hints(pin, mer, pairs, score_fn=score_fn)
+    pin, mer = pair_inputs(events, offer, mx_comp, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
+    score = score_fn if by_comp else (score_fn or common.other_score)
+    return mx.hints(pin, mer, pairs, score_fn=score)
 
 
 def board_match(event, pin, hit, rows, periods, groups, prefixes, stale=None, league_id=None):
@@ -526,8 +529,6 @@ class BasketballState(common.SnapshotState):
         return True
 
     def comp_id(self, row):
-        if isinstance(self.bookie, bookie_adapter.FeedBookieAdapter):
-            return self.mx_comp.get(row.get("leagueId"))
         return self.bookie.comp_id(self.clv_name, row)
 
     def shape(self, event, hit):
@@ -535,14 +536,14 @@ class BasketballState(common.SnapshotState):
 
     def pair(self, events, offer):
         return pair_events(events, offer, self.mx_comp, self.score_fn,
-                           comp_fn=self.comp_id, is_prematch=self.is_prematch)
+                           comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=self.bookie.pair_by_comp)
 
     def hints(self, events, offer, pairs):
         return unpaired_hints(events, offer, pairs, self.mx_comp, self.score_fn,
-                              comp_fn=self.comp_id, is_prematch=self.is_prematch)
+                              comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=self.bookie.pair_by_comp)
 
     def offered(self, offer):
-        return sum(1 for r in offer if self.comp_id(r) is not None and self.is_prematch(r))
+        return sum(1 for r in offer if (not self.bookie.pair_by_comp or self.comp_id(r) is not None) and self.is_prematch(r))
 
     def drop_quotes(self, event, match):
         return drop_quotes(event, match)

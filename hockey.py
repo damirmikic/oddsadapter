@@ -217,6 +217,8 @@ ALIASES = {
 
 
 def name_score(pinnacle, merkur):
+    if common.side_markers(pinnacle) != common.side_markers(merkur):
+        return 0.0
     return mx.name_score(pinnacle, ALIASES.get(" ".join(mx.norm_tokens(merkur)), merkur))
 
 

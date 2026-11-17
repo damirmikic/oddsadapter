@@ -387,29 +387,32 @@ def goals_line(match, totals_rows):
 PAIR_WINDOW = 6 * 60
 
 
-def pair_inputs(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch):
-    pin = [{"id": str(e["event_id"]), "comp": PAIR_COMP[e["league_id"]], "home": e.get("home", ""),
-            "away": e.get("away", ""), "ts": event_ts(e)} for e in events]
+def pair_inputs(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
+    pin = [{"id": str(e["event_id"]), "comp": PAIR_COMP[e["league_id"]] if by_comp else "*",
+            "home": e.get("home", ""), "away": e.get("away", ""), "ts": event_ts(e)} for e in events]
     mer = []
     for r in offer:
         if not is_prematch(r):
             continue
-        comp = comp_fn(r)
+        comp = comp_fn(r) if by_comp else "*"
         if comp:
             mer.append({"id": r["id"], "comp": comp, "home": r.get("home", ""),
                         "away": r.get("away", ""), "ts": merkur_ts(r), "row": r})
     return pin, mer
 
 
-def pair_events(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch):
-    pin, mer = pair_inputs(events, offer, comp_fn=comp_fn, is_prematch=is_prematch)
-    return {pid: (m["row"], score) for pid, (m, score) in mx.pair(pin, mer, PAIR_WINDOW).items()}
+def pair_events(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
+    pin, mer = pair_inputs(events, offer, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
+    min_score = 0.5 if by_comp else common.OTHER_MIN_SCORE
+    score_fn = None if by_comp else other_score
+    return {pid: (m["row"], score) for pid, (m, score) in mx.pair(pin, mer, PAIR_WINDOW, min_score, score_fn).items()}
 
 
-def unpaired_hints(events, offer, pairs, comp_fn=merkur_comp, is_prematch=mx.is_prematch):
+def unpaired_hints(events, offer, pairs, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
     """{pinnacle id: closest unused MerkurXtip offer row} for events without a pair, for the "missing" view."""
-    pin, mer = pair_inputs(events, offer, comp_fn=comp_fn, is_prematch=is_prematch)
-    return mx.hints(pin, mer, pairs, PAIR_WINDOW)
+    pin, mer = pair_inputs(events, offer, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
+    score_fn = None if by_comp else other_score
+    return mx.hints(pin, mer, pairs, PAIR_WINDOW, score_fn)
 
 
 def unpaired_other(events, offer, used, is_prematch=mx.is_prematch):
@@ -506,8 +509,6 @@ class DashboardState(common.SnapshotState):
         self.other_cache = None  # (offer, signature, unpaired ids, hints, offered) of leagues outside COMPETITIONS
 
     def comp_id(self, row):
-        if isinstance(self.bookie, bookie_adapter.FeedBookieAdapter):
-            return merkur_comp(row)
         return self.bookie.comp_id("football", row)
 
     def merged(self, incoming, stamp):
@@ -528,8 +529,9 @@ class DashboardState(common.SnapshotState):
             events = [clean_ah0(e) for e in upcoming if is_tracked(e)]
             others = [e for e in upcoming if not is_tracked(e)]
             matches = [summary(e, self.history.track(e["event_id"]), cleaned=True) for e in events]
-        pairs = pair_events(events, offer, comp_fn=self.comp_id, is_prematch=self.is_prematch)
-        hints = unpaired_hints(events, offer, pairs, comp_fn=self.comp_id, is_prematch=self.is_prematch)
+        by_comp = self.bookie.pair_by_comp
+        pairs = pair_events(events, offer, comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=by_comp)
+        hints = unpaired_hints(events, offer, pairs, comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=by_comp)
         self.pairs = pairs
         by_id = {str(e["event_id"]): e for e in events}
         values, quotes, clv_rows = [], {}, {}
@@ -583,7 +585,7 @@ class DashboardState(common.SnapshotState):
                 "fetchedAt": self.merkur.stamp,
                 "error": self.merkur.error,
                 "paired": sum(1 for m in matches if m["merkur"]),
-                "offered": sum(1 for r in offer if self.comp_id(r) and self.is_prematch(r)),
+                "offered": sum(1 for r in offer if (not self.bookie.pair_by_comp or self.comp_id(r)) and self.is_prematch(r)),
             },
         }
 
