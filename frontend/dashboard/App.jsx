@@ -646,7 +646,7 @@ export default function App() {
                     <option value="-0.02">najveće ≥ −2%</option>
                     <option value="0">najveće ≥ 0%</option>
                     <option value="0.02">najveće ≥ +2%</option>
-                    <option value="missing">nije u ponudi MX</option>
+                    <option value="missing">nije u ponudi {activeBookie.short}</option>
                   </select>
                 </label>
               )}
@@ -666,11 +666,11 @@ export default function App() {
                 </span>
               ) : (
                 <span className="legend mc-legend">
-                  <span className="mc-cell mx-fair">MX ≥ fer</span>
-                  <span className="mc-cell mx-above">MX &gt; Pinnacle</span>
+                  <span className="mc-cell mx-fair">{activeBookie.short} ≥ fer</span>
+                  <span className="mc-cell mx-above">{activeBookie.short} &gt; Pinnacle</span>
                   {view === "compare" && (
                     <>
-                      <span className="mc-cell mx-moved" title="Promena pri poslednjem osvežavanju">MX promena</span>
+                      <span className="mc-cell mx-moved" title="Promena pri poslednjem osvežavanju">{activeBookie.short} promena</span>
                       <span className="mc-cell pin-up" title="Promena pri poslednjem osvežavanju">PIN raste</span>
                       <span className="mc-cell pin-down" title="Promena pri poslednjem osvežavanju">PIN pada</span>
                     </>

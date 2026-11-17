@@ -1,7 +1,7 @@
 // Search across every sport: the team search box with a dropdown of hits from all loaded boards.
 import { useState } from "react";
 import { evClass, fmtEv, fmtKickoffShort } from "./format.js";
-import { CompBadge } from "./ui.jsx";
+import { CompBadge, useBookie } from "./ui.jsx";
 import { SPORTS, SportIcon } from "./menu.jsx";
 
 const MAX_SHOWN = 12;
@@ -30,6 +30,7 @@ export function searchAll(boards, query) {
 }
 
 export function GlobalSearch({ query, setQuery, hits, onOpen }) {
+  const { short } = useBookie();
   const [open, setOpen] = useState(false);
   const shown = hits.slice(0, MAX_SHOWN);
   const pick = (hit) => {
@@ -76,7 +77,7 @@ export function GlobalSearch({ query, setQuery, hits, onOpen }) {
                 <span className="search-time">{fmtKickoffShort(new Date(m.starts))}</span>
                 {m.merkur
                   ? <span className={`search-ev ${evClass(ev)}`}>{fmtEv(ev)}</span>
-                  : <span className="search-ev muted">nije u MX</span>}
+                  : <span className="search-ev muted">nije u {short}</span>}
               </button>
             );
           })}

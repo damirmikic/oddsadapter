@@ -7,6 +7,7 @@ import { VALUE_LEVELS, ValueRange, ValueTable, bestPerMarket, isTopLeague, range
 import { matchesQuery } from "./search.jsx";
 import { OddsModal } from "./football/detail.jsx";
 import { SportOddsModal } from "./sport.jsx";
+import { useBookie } from "./ui.jsx";
 
 // Market types shared by every sport (group labels differ per sport: "Ukupno golova", "Ukupno poena" …).
 const ALL_VALUE_GROUPS = [
@@ -48,6 +49,7 @@ export function AllValuePane({ boards, errors, dayFilter, setDayFilter, query, s
   const [evMin, setEvMin] = useState(() => readStored("pb.all.evMin", ""));
   const [evMax, setEvMax] = useState(() => readStored("pb.all.evMax", ""));
   const [topOnly, setTopOnly] = useState(() => readStored("pb.all.topOnly", false));
+  const { short } = useBookie();
   // "all", "<sport>" or "<sport>:<league id>"
   const [pick, setPick] = useState("all");
   // sports ticked in the button row (multi-select); empty means every sport
@@ -143,7 +145,7 @@ export function AllValuePane({ boards, errors, dayFilter, setDayFilter, query, s
           <div className="segmented view-switch">
             <button type="button" className={pick === "all" && !sportSel.length ? "active" : ""}
               onClick={() => { setPick("all"); setSportSel([]); }}
-              title={`${valueList.length} ishoda gde je MX > Pinnacle, od toga ${fairValueCount} gde je MX ≥ fer`}>
+              title={`${valueList.length} ishoda gde je ${short} > Pinnacle, od toga ${fairValueCount} gde je ${short} ≥ fer`}>
               Svi <span className="view-count">{levelValues.length}</span>
             </button>
             {sportItems.map((s) => (
@@ -185,8 +187,8 @@ export function AllValuePane({ boards, errors, dayFilter, setDayFilter, query, s
           </div>
           {searchBox}
           <span className="legend mc-legend">
-            <span className="mc-cell mx-fair">MX ≥ fer</span>
-            <span className="mc-cell mx-above">MX &gt; Pinnacle</span>
+            <span className="mc-cell mx-fair">{short} ≥ fer</span>
+            <span className="mc-cell mx-above">{short} &gt; Pinnacle</span>
           </span>
         </div>
         <main className="workspace">

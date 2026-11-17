@@ -499,8 +499,8 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
           </div>
           {searchBox}
           <span className="legend mc-legend">
-            <span className="mc-cell mx-fair">MX ≥ fer</span>
-            <span className="mc-cell mx-above">MX &gt; Pinnacle</span>
+            <span className="mc-cell mx-fair">{short} ≥ fer</span>
+            <span className="mc-cell mx-above">{short} &gt; Pinnacle</span>
           </span>
         </div>
         <main className="workspace">

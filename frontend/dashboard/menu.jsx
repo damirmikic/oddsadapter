@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { readStored, writeStored } from "./api.js";
 import { evClass, fmtEv } from "./format.js";
-import { CompBadge } from "./ui.jsx";
+import { CompBadge, useBookie } from "./ui.jsx";
 
 export const SPORTS = [
   { key: "football", label: "Fudbal", live: true },
@@ -96,6 +96,7 @@ function sortedGroups(groups, favorites) {
 // `searching`: sportCounts are the search hits per sport, not the match counts
 // `valueTab`: the all-sports Value screen ({count, active, onOpen}), shown before the alerts
 export function SideMenu({ sport, onSport, sportCounts, searching, groups, all, onPick, label, alerts, valueTab }) {
+  const { short } = useBookie();
   const [favoriteMap, setFavoriteMap] = useState(() => readStored(FAVORITES_KEY, {}) || {});
   const favorites = new Set(favoriteMap[sport] || []);
   const toggleFavorite = (key) => {
@@ -134,7 +135,7 @@ export function SideMenu({ sport, onSport, sportCounts, searching, groups, all, 
             aria-selected={valueTab.active}
             className={`sport-btn${valueTab.active ? " active" : ""}`}
             onClick={valueTab.onOpen}
-            title={`Value iz svih sportova: ${valueTab.count} ishoda gde je MX ≥ fer`}
+            title={`Value iz svih sportova: ${valueTab.count} ishoda gde je ${short} ≥ fer`}
           >
             {valueTab.count > 0 && <b className="sport-count">{valueTab.count}</b>}
             <SportIcon sport="value" />

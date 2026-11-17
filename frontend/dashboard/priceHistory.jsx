@@ -14,7 +14,7 @@ export function usePriceHistory(sport, matchId, reloadKey) {
     const controller = new AbortController();
     requestJson(`/api/history?sport=${sport}&id=${matchId}`, { signal: controller.signal })
       .then((data) => setHistory(new Map(data.series.map((s) => [histKey(s.period, s.group, s.line, s.key), s.points]))))
-      .catch(() => {}); // the charts are optional, the odds stay usable without them
+      .catch(() => { }); // the charts are optional, the odds stay usable without them
     return () => controller.abort();
   }, [sport, matchId, reloadKey]);
   return history;
@@ -50,6 +50,7 @@ function stepPath(points, column, scales, end) {
 }
 
 export function Sparkline({ points, active, onToggle }) {
+  const { short } = useBookie();
   if (!points) return <span className="spark-none">—</span>;
   const first = points[0];
   if (points.length < 2) {
@@ -64,7 +65,7 @@ export function Sparkline({ points, active, onToggle }) {
       className={`spark${active ? " active" : ""}`}
       onClick={onToggle}
       aria-expanded={active}
-      title={`PIN ${fmtOdds(first[1])} → ${fmtOdds(last[1])} · MX ${fmt2(first[2])} → ${fmt2(last[2])} · `
+      title={`PIN ${fmtOdds(first[1])} → ${fmtOdds(last[1])} · ${short} ${fmt2(first[2])} → ${fmt2(last[2])} · `
         + `${points.length - 1} promena od ${fmtWhen(new Date(first[0] * 1000))}. Klik za grafikon.`}
     >
       <svg viewBox="0 0 64 20" width="64" height="20" aria-hidden="true">
@@ -153,7 +154,7 @@ export function PriceChart({ points, label }) {
         <div className="chart-tip" style={{ left: `${(scales.x(hover) / width) * 100}%` }}>
           <span>{fmtWhen(new Date(at[0] * 1000))}</span>
           <i style={{ background: "var(--pin-line)" }} />PIN <b>{fmtOdds(at[1])}</b>
-          <i style={{ background: "var(--mx-line)" }} />MX <b>{fmt2(at[2])}</b>
+          <i style={{ background: "var(--mx-line)" }} />{bookie.short} <b>{fmt2(at[2])}</b>
           <span> · fer {fmtOdds(at[3])}</span>
         </div>
       )}
@@ -163,10 +164,11 @@ export function PriceChart({ points, label }) {
 
 // Value list: when each book last moved this price (board refreshes, so at most one refresh late).
 export function ChangeTimes({ value }) {
+  const { short } = useBookie();
   const seen = value.seenAt ? `Prati se od ${fmtWhen(new Date(value.seenAt))}` : "Istorija kvota nije dostupna";
   return (
     <div title={seen}>
-      {[["MX", value.mxChangedAt], ["PIN", value.pinChangedAt]].map(([book, at]) => (
+      {[[short, value.mxChangedAt], ["PIN", value.pinChangedAt]].map(([book, at]) => (
         <div key={book} className={at && Date.now() - Date.parse(at) < 15 * 60000 ? "recent" : ""}>
           <small>{book}</small> {at ? fmtWhen(new Date(at)) : "—"}
         </div>
