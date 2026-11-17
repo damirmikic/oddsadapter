@@ -8,6 +8,8 @@ See `bookie_example.py` for a minimal starter template.
 """
 from __future__ import annotations
 
+import importlib
+import importlib.metadata
 import os
 import time
 
@@ -115,8 +117,26 @@ def list_adapters():
     return sorted(seen)
 
 
-def get_adapter(name=None, config_loader=None):
+def load_external_adapters(modules=None, config_loader=None):
+    """Load external bookie adapters from modules, `XTIP_BOOKIE_MODULES`, config, and `xtip.bookies` entry points."""
+    names = list(modules or ())
+    env_mods = os.environ.get("XTIP_BOOKIE_MODULES", "")
+    if env_mods:
+        names.extend(m.strip() for m in env_mods.split(",") if m.strip())
+    if config_loader is not None:
+        cfg_mods = (config_loader() or {}).get("bookie_modules") or ()
+        names.extend(cfg_mods)
+    for mod_name in names:
+        importlib.import_module(mod_name)
+    for ep in importlib.metadata.entry_points(group="xtip.bookies"):
+        loaded = ep.load()
+        if isinstance(loaded, type) and issubclass(loaded, BookieAdapter):
+            register_adapter(loaded)
+
+
+def get_adapter(name=None, config_loader=None, modules=None):
     """Instantiate the active `BookieAdapter` (explicit name -> `XTIP_BOOKIE` -> config -> merkurxtip)."""
+    load_external_adapters(modules=modules, config_loader=config_loader)
     chosen = name or os.environ.get("XTIP_BOOKIE")
     if not chosen and config_loader is not None:
         chosen = (config_loader() or {}).get("bookie")

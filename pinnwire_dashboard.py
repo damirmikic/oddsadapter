@@ -799,9 +799,9 @@ for _sport, _state in SPORT_STATES.items():
     _state.label = _sport
 
 
-def set_active_bookie(name=None):
+def set_active_bookie(name=None, modules=None):
     """Select the active bookie adapter (explicit name -> XTIP_BOOKIE -> config -> merkurxtip) on all states."""
-    bookie = bookie_adapter.get_adapter(name, load_config)
+    bookie = bookie_adapter.get_adapter(name, load_config, modules=modules)
     for state in SPORT_STATES.values():
         state.set_bookie(bookie)
     return bookie
@@ -1083,6 +1083,8 @@ def main():
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--bookie", default=None,
                         help=f"Bookie adapter ({', '.join(bookie_adapter.list_adapters())})")
+    parser.add_argument("--bookie-module", action="append", default=[],
+                        help="Python module(s) to import for external bookie adapters")
     args = parser.parse_args()
 
     if not os.path.isfile(os.path.join(STATIC, "index.html")):
@@ -1097,7 +1099,7 @@ def main():
     host = "127.0.0.1" if args.host in ("0.0.0.0", "") else args.host
     url = f"http://{host}:{args.port}"
     applog.setup(LOGS)  # after the bind: a second server that exits above must not touch the first one's log
-    active_bookie = set_active_bookie(args.bookie)
+    active_bookie = set_active_bookie(args.bookie, modules=args.bookie_module)
     log.info("Server pokrenut: %s  (bookie: %s, Ctrl+C za prekid)", url, active_bookie.label)
     DROPS.start()
     start_prices()
