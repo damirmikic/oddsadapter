@@ -589,6 +589,7 @@ class DashboardState(common.SnapshotState):
             "callsToday": self.history.calls_today(),
             "values": sorted(values, key=lambda v: v["ev"], reverse=True),
             "bookie": self.bookie.meta(),
+            "bookies": bookie_adapter.adapter_catalog(),
             "merkur": {
                 "fetchedAt": self.merkur.stamp,
                 "error": self.merkur.error,

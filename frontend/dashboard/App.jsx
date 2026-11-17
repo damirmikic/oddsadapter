@@ -413,6 +413,7 @@ export default function App() {
 
 
   const activeBookie = cur?.bookie || bookie;
+  const availableBookies = cur?.bookies || bookies;
 
   return (
     <BookieContext.Provider value={activeBookie}>
@@ -424,6 +425,18 @@ export default function App() {
             <strong>Odds Monitor</strong>
             <small>{allValue ? "Value, svi sportovi" : SPORT_VIEWS[sport]?.label || "Fudbal"} · Pinnacle vs {activeBookie.label}</small>
           </div>
+          {availableBookies.length > 0 && (
+            <label className="bookie-picker" title="Izaberi kladionicu za poređenje">
+              <span>Kladionica</span>
+              <select
+                value={activeBookie.name}
+                disabled={switchingBookie}
+                onChange={(e) => switchBookie(e.target.value)}
+              >
+                {availableBookies.map((b) => <option key={b.name} value={b.name}>{b.label}</option>)}
+              </select>
+            </label>
+          )}
         </div>
 
         <div className="status">
@@ -459,18 +472,6 @@ export default function App() {
             <button type="button" className="button ghost" onClick={pwa.install} title="Instaliraj Odds Monitor kao aplikaciju">
               ⤓ Instaliraj
             </button>
-          )}
-          {bookies.length > 1 && (
-            <label className="auto" title="Izaberi kladionicu za poređenje">
-              Kladionica
-              <select
-                value={activeBookie.name}
-                disabled={switchingBookie}
-                onChange={(e) => switchBookie(e.target.value)}
-              >
-                {bookies.map((b) => <option key={b.name} value={b.name}>{b.label}</option>)}
-              </select>
-            </label>
           )}
           <label className="auto">
             Auto
