@@ -2,12 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { readStored, writeStored } from "./api.js";
 import { fmt2, fmtKickoffShort, fmtLine } from "./format.js";
-import { CompBadge, ML_SIDES } from "./ui.jsx";
+import { CompBadge, ML_SIDES, useBookie } from "./ui.jsx";
 import { SPORT_VIEWS } from "./sportViews.js";
 
 // Empty "missing" view: say whether nothing is missing at all or only under the current filters.
-export function missingEmpty(total, filtered, showAll) {
-  if (!total) return "Svi mečevi su u ponudi MerkurXtip.";
+export function missingEmpty(total, filtered, showAll, bookieLabel = "kladionice") {
+  if (!total) return `Svi mečevi su u ponudi ${bookieLabel}.`;
   return (
     <>
       Nema nedostajućih mečeva za izabrane filtere (liga, dan, pretraga). Ukupno nedostaje {total}.{" "}
@@ -16,17 +16,18 @@ export function missingEmpty(total, filtered, showAll) {
   );
 }
 
-// Untracked leagues whose matches MerkurXtip does offer: everything a new competition entry needs.
+// Untracked leagues whose matches the bookie does offer: everything a new competition entry needs.
 export function OtherOffered({ leagues }) {
+  const { label } = useBookie();
   if (!leagues?.length) return null;
   return (
     <details className="other-offered">
-      <summary>U ponudi MerkurXtip, a ne pratimo ({leagues.length} liga)</summary>
+      <summary>U ponudi {label}, a ne pratimo ({leagues.length} liga)</summary>
       <ul>
         {leagues.map((o) => (
           <li key={o.leagueId}>
             <b>{o.leagueName}</b> · {o.count} {o.count === 1 ? "meč" : "mečeva"}
-            <small> · PinnWire {o.leagueId} · MerkurXtip {o.mxLeague} ({o.mxLeagueId})</small>
+            <small> · PinnWire {o.leagueId} · {label} {o.mxLeague} ({o.mxLeagueId})</small>
           </li>
         ))}
       </ul>
@@ -34,8 +35,9 @@ export function OtherOffered({ leagues }) {
   );
 }
 
-// Matches Pinnacle prices but MerkurXtip does not offer (or could not be paired by team names).
+// Matches Pinnacle prices but the bookie does not offer (or could not be paired by team names).
 export function MissingTable({ matches: unsorted, competitions, sport }) {
+  const { label } = useBookie();
   const [sortBy, setSortBy] = useState(() => readStored("missingSort", "time"));
   useEffect(() => writeStored("missingSort", sortBy), [sortBy]);
   const matches = useMemo(() => (sortBy === "league"
@@ -64,7 +66,7 @@ export function MissingTable({ matches: unsorted, competitions, sport }) {
             <th colSpan={sides.length} className="mc-group">Pinnacle {football ? "1X2" : "pobednik"}</th>
             <th colSpan={3} className="mc-group-strong">{SPORT_VIEWS[sport]?.spreadTitle || "Hendikep"}</th>
             <th colSpan={3} className="mc-group-strong">{SPORT_VIEWS[sport]?.totalTitle || "Golovi"}</th>
-            <th className="mc-group">Najbliže u ponudi MerkurXtip</th>
+            <th className="mc-group">Najbliže u ponudi {label}</th>
           </tr>
         </thead>
         <tbody>
@@ -97,7 +99,7 @@ export function MissingTable({ matches: unsorted, competitions, sport }) {
                 ) : <td className="mc-group-strong muted" colSpan={3}>—</td>}
                 <td className="mc-group missing-hint">
                   {match.hint ? (
-                    <span title="Najbolje poklapanje među neuparenim mečevima iste lige. Verovatno isti meč pod drugim imenima: dodaj alias u merkur_client.py.">
+                    <span title="Najbolje poklapanje među neuparenim mečevima iste lige. Verovatno isti meč pod drugim imenima: dodaj alias za uparivanje.">
                       {match.hint.home} – {match.hint.away}
                       <small> sličnost {Math.round(match.hint.score * 100)}%
                         {match.hint.kickoffDiff ? ` · ${match.hint.kickoffDiff > 0 ? "+" : "−"}${Math.abs(match.hint.kickoffDiff)} min` : ""}

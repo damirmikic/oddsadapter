@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readStored, requestJson, writeStored } from "./api.js";
 import { DAY_FILTERS, clockFmt, dayKey, dayLabel, evClass, fmt2, fmtEv, fmtKickoffShort, fmtLimit, fmtLine, fmtMargins, fmtOdds, inDayFilter, merkurClass, merkurTitle, timeFmt } from "./format.js";
-import { CompBadge, KickoffWarning, ModeledTag, StaleTag } from "./ui.jsx";
+import { CompBadge, KickoffWarning, ModeledTag, StaleTag, useBookie } from "./ui.jsx";
 import { PriceChart, Sparkline, histKey, usePriceHistory } from "./priceHistory.jsx";
 import { VALUE_LEVELS, ValueRange, ValueTable, bestPerMarket, isTopLeague, rangePasses } from "./value.jsx";
 import { SideMenu, buildMenuGroups } from "./menu.jsx";
@@ -23,6 +23,7 @@ function sportValuePasses(value, level, group, teamPrefix) {
 
 // Fair / Pinnacle / MerkurXtip cells of one two-way line market (handicap or total points).
 function SportLineCells({ cell, sides, signed }) {
+  const { label, short } = useBookie();
   if (!cell) return <td className="mc-line mc-group-strong" colSpan={7}><span className="muted">—</span></td>;
   return (
     <>
@@ -44,11 +45,11 @@ function SportLineCells({ cell, sides, signed }) {
             {odds ? (
               <span
                 className={`mc-cell ${merkurClass(odds, cell.pinnacle[side], cell.ev?.[side])}`}
-                title={merkurTitle(odds, cell.pinnacle[side], cell.fair[side], cell.ev?.[side])}
+                title={merkurTitle(odds, cell.pinnacle[side], cell.fair[side], cell.ev?.[side], null, short)}
               >
                 {fmt2(odds)}
               </span>
-            ) : <span className="muted" title="MerkurXtip nema ovu liniju">—</span>}
+            ) : <span className="muted" title={`${label} nema ovu liniju`}>—</span>}
           </td>
         );
       })}
@@ -57,9 +58,10 @@ function SportLineCells({ cell, sides, signed }) {
 }
 
 function SportDetail({ match, periodKey = "ft", history }) {
+  const { label, short } = useBookie();
   const [open, setOpen] = useState("");
   const rows = (periodKey === "ft" ? match.rows : match.periods?.[periodKey]) || [];
-  if (!match.merkur) return <p className="muted bb-detail">Meč nije u ponudi MerkurXtip (ili nije uparen).</p>;
+  if (!match.merkur) return <p className="muted bb-detail">Meč nije u ponudi {label} (ili nije uparen).</p>;
   const modeled = rows.filter((r) => r.modeled).length;
   return (
     <div className="bb-detail">
@@ -78,10 +80,10 @@ function SportDetail({ match, periodKey = "ft", history }) {
               <th>Ishod</th>
               <th>Fer</th>
               <th>PIN</th>
-              <th>MX</th>
-              <th title="MerkurXtip kvota / Pinnacle fer kvota − 1">Razlika</th>
+              <th>{short}</th>
+              <th title={`${label} kvota / Pinnacle fer kvota − 1`}>Razlika</th>
               <th title="Pinnacle limit (max bet) tržišta">Max bet</th>
-              <th title="Kretanje kvota: Pinnacle (plavo) i MerkurXtip (narandžasto). Klik za grafikon.">Kretanje</th>
+              <th title={`Kretanje kvota: Pinnacle (plavo) i ${label} (narandžasto). Klik za grafikon.`}>Kretanje</th>
             </tr>
           </thead>
           {rows.map((r, i) => {
@@ -97,7 +99,7 @@ function SportDetail({ match, periodKey = "ft", history }) {
                       <th rowSpan={r.outcomes.length} className="mx-market">
                         {r.group}
                         {r.line != null && <span>{fmtLine(r.line, spread)}{r.modeled && <ModeledTag />}</span>}
-                        <small title="Marža MerkurXtip / Pinnacle">{fmtMargins(r.merkurMargin, r.pinnacleMargin)}</small>
+                        <small title={`Marža ${label} / Pinnacle`}>{fmtMargins(r.merkurMargin, r.pinnacleMargin)}</small>
                       </th>
                     )}
                     <td className="mx-side">{side(o)}</td>
@@ -137,6 +139,7 @@ function SportDetail({ match, periodKey = "ft", history }) {
 }
 
 export function SportOddsModal({ sport, matchId, boardMatch, onClose, onCalls }) {
+  const { label } = useBookie();
   const [detail, setDetail] = useState(null);
   const [periodKey, setPeriodKey] = useState("ft");
   const [error, setError] = useState("");
@@ -193,13 +196,14 @@ export function SportOddsModal({ sport, matchId, boardMatch, onClose, onCalls })
         {!detail && !error && <p className="state">Učitavam kvote…</p>}
         {detail?.error && <p className="state error">{detail.error} Prikazane su kvote iz liste ponude.</p>}
         {detail && <SportDetail match={detail.match} periodKey={periodKey} history={history} />}
-        {detail?.fetchedAt && <p className="muted bb-fetched">MerkurXtip {clockFmt.format(new Date(detail.fetchedAt))}</p>}
+        {detail?.fetchedAt && <p className="muted bb-fetched">{label} {clockFmt.format(new Date(detail.fetchedAt))}</p>}
       </div>
     </div>
   );
 }
 
 function SportRow({ match, competition, expanded, onToggle, spread }) {
+  const { label, short } = useBookie();
   const x = match.merkur;
   return (
     <>
@@ -209,7 +213,7 @@ function SportRow({ match, competition, expanded, onToggle, spread }) {
             {fmtKickoffShort(new Date(match.starts))}
             {x && <KickoffWarning diff={x.kickoffDiff} />}
             {x?.stale?.map((st) => (
-              <span key={st.group} title={`${st.group}: glavna linija MerkurXtip se razlikuje od Pinnacle`}>
+              <span key={st.group} title={`${st.group}: glavna linija ${label} se razlikuje od Pinnacle`}>
                 <StaleTag gap={st.gap} />
               </span>
             ))}
@@ -233,11 +237,11 @@ function SportRow({ match, competition, expanded, onToggle, spread }) {
               {odds ? (
                 <span
                   className={`mc-cell ${merkurClass(odds, match.ml?.[side]?.odds, ev)}`}
-                  title={merkurTitle(odds, match.ml?.[side]?.odds, match.ml?.[side]?.fair, ev)}
+                  title={merkurTitle(odds, match.ml?.[side]?.odds, match.ml?.[side]?.fair, ev, null, short)}
                 >
                   {fmt2(odds)}
                 </span>
-              ) : <span className="muted" title={x ? "MerkurXtip nema pobednika" : "Nije u ponudi MerkurXtip"}>—</span>}
+              ) : <span className="muted" title={x ? `${label} nema pobednika` : `Nije u ponudi ${label}`}>—</span>}
             </td>
           );
         })}
@@ -249,6 +253,7 @@ function SportRow({ match, competition, expanded, onToggle, spread }) {
 }
 
 function SportCompareTable({ sport, matches, competitions, selectedId, onOpen }) {
+  const { label } = useBookie();
   const cfg = SPORT_VIEWS[sport];
   const byId = useMemo(() => new Map(competitions.map((c) => [c.id, c])), [competitions]);
   return (
@@ -262,19 +267,19 @@ function SportCompareTable({ sport, matches, competitions, selectedId, onOpen })
             <th colSpan={7} className="mc-group-strong">{cfg.totalTitle}</th>
           </tr>
           <tr className="mc-sub">
-            {["No-vig", "Pinnacle", "MerkurXtip"].map((title) => (
+            {["No-vig", "Pinnacle", label].map((title) => (
               <th key={`ml${title}`} colSpan={2} className="mc-group">{title}</th>
             ))}
             {cfg.spreadTitle && (
               <>
                 <th className="mc-line mc-group-strong">linija</th>
-                {["No-vig", "Pinnacle", "MerkurXtip"].map((title) => (
+                {["No-vig", "Pinnacle", label].map((title) => (
                   <th key={`h${title}`} colSpan={2} className="mc-group">{title}</th>
                 ))}
               </>
             )}
             <th className="mc-line mc-group-strong">linija</th>
-            {["No-vig", "Pinnacle", "MerkurXtip"].map((title) => (
+            {["No-vig", "Pinnacle", label].map((title) => (
               <th key={`t${title}`} colSpan={2} className="mc-group">{title}</th>
             ))}
           </tr>
@@ -297,6 +302,7 @@ function SportCompareTable({ sport, matches, competitions, selectedId, onOpen })
 }
 
 export function SportPane({ board, error, loading, dayFilter, setDayFilter, query, searchBox, sport, onSport, sportCounts, searching, setCallsToday, alertsTab, valueTab, openReq }) {
+  const { label, short } = useBookie();
   const cfg = SPORT_VIEWS[sport];
   const store = useCallback((name) => `pb.${cfg.store}.${name}`, [cfg.store]);
   const [competition, setCompetition] = useState(() => readStored(store("competition"), "all"));
@@ -435,13 +441,13 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
         <div className="filters">
           <div className="segmented view-switch">
             <button type="button" className={view === "compare" ? "active" : ""} onClick={() => setView("compare")}>
-              MerkurXtip vs Pinnacle
+              {label} vs Pinnacle
             </button>
             <button
               type="button"
               className={view === "value" ? "active" : ""}
               onClick={() => setView("value")}
-              title={`${valueList.length} ishoda gde je MX > Pinnacle, od toga ${fairValueCount} gde je MX ≥ fer`}
+              title={`${valueList.length} ishoda gde je ${short} > Pinnacle, od toga ${fairValueCount} gde je ${short} ≥ fer`}
             >
               Value <span className="view-count">{fairValueCount}/{valueList.length}</span>
             </button>
@@ -449,7 +455,7 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
               type="button"
               className={view === "missing" ? "active" : ""}
               onClick={() => setView("missing")}
-              title="Mečevi koje Pinnacle ima, a MerkurXtip nema"
+              title={`Mečevi koje Pinnacle ima, a ${label} nema`}
             >
               Nedostaju <span className="view-count">{missingTotal}</span>
             </button>
@@ -476,7 +482,7 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
                     <input type="checkbox" checked={showModeled} onChange={(e) => setShowModeled(e.target.checked)} />
                     modelirano
                   </label>
-                  <label className="auto" title="Samo ishodi na strani koju favorizuje razlika glavnih linija (MerkurXtip kasni)">
+                  <label className="auto" title={`Samo ishodi na strani koju favorizuje razlika glavnih linija (${label} kasni)`}>
                     <input type="checkbox" checked={onlyStale} onChange={(e) => setOnlyStale(e.target.checked)} />
                     samo kasni
                   </label>

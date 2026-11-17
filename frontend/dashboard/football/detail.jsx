@@ -2,13 +2,14 @@
 import { useEffect, useState } from "react";
 import { requestJson } from "../api.js";
 import { clockFmt, dayLabel, evClass, fmtEv, fmtLimit, fmtLine, fmtMargins, fmtOdds, fmtPct, marketLine, merkurClass, timeFmt } from "../format.js";
-import { CompBadge, DerivedTag, KickoffWarning, ML_SIDES, Price } from "../ui.jsx";
+import { CompBadge, DerivedTag, KickoffWarning, ML_SIDES, Price, useBookie } from "../ui.jsx";
 import { PriceChart, Sparkline, histKey, usePriceHistory } from "../priceHistory.jsx";
 
 function MerkurComparison({ merkur, periodKey, home, away, history }) {
+  const { label, short } = useBookie();
   const [open, setOpen] = useState("");
   if (!merkur) {
-    return <p className="state">Meč nije u ponudi MerkurXtip (ili nije uparen).</p>;
+    return <p className="state">Meč nije u ponudi {label} (ili nije uparen).</p>;
   }
   const rows = merkur.periods[periodKey] || [];
   const sideLabel = (group, label) => {
@@ -18,8 +19,8 @@ function MerkurComparison({ merkur, periodKey, home, away, history }) {
   return (
     <section className="detail-card mx-card">
       <h3>
-        MerkurXtip vs Pinnacle fer
-        <small>šifra {merkur.code} · {clockFmt.format(new Date(merkur.fetchedAt))}</small>
+        {label} vs Pinnacle fer
+        <small>{merkur.code ? `šifra ${merkur.code} · ` : ""}{clockFmt.format(new Date(merkur.fetchedAt))}</small>
       </h3>
       <p className="mx-names">
         {merkur.home} – {merkur.away}
@@ -35,10 +36,10 @@ function MerkurComparison({ merkur, periodKey, home, away, history }) {
               <th>Ishod</th>
               <th>Fer</th>
               <th>PIN</th>
-              <th>MX</th>
-              <th title="MerkurXtip kvota / Pinnacle fer kvota − 1">Razlika</th>
+              <th>{short}</th>
+              <th title={`${label} kvota / Pinnacle fer kvota − 1`}>Razlika</th>
               <th title="Pinnacle limit (max bet) tržišta">Max bet</th>
-              <th title="Kretanje kvota: Pinnacle (plavo) i MerkurXtip (narandžasto). Klik za grafikon.">Kretanje</th>
+              <th title={`Kretanje kvota: Pinnacle (plavo) i ${label} (narandžasto). Klik za grafikon.`}>Kretanje</th>
             </tr>
           </thead>
           {rows.map((row, i) => {
@@ -51,7 +52,7 @@ function MerkurComparison({ merkur, periodKey, home, away, history }) {
                     <th rowSpan={row.outcomes.length} className="mx-market">
                       {row.group}
                       {row.line != null && <span>{marketLine(row.group, row.line)}{row.derived && <DerivedTag />}</span>}
-                      <small title="Marža MerkurXtip / Pinnacle">
+                      <small title={`Marža ${label} / Pinnacle`}>
                         {fmtMargins(row.merkurMargin, row.pinnacleMargin)}
                       </small>
                     </th>

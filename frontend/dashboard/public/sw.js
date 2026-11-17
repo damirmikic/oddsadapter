@@ -1,4 +1,4 @@
-/* Xtip Monitor service worker.
+/* Odds Monitor service worker.
  *
  * - App shell (index.html, manifest, icons) is precached; hashed /assets/* are cached on first use.
  * - Navigations: network first, cached shell when offline.

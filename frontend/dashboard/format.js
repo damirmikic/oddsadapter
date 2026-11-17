@@ -118,12 +118,12 @@ export function merkurClass(odds, pinnacle, ev, prev) {
   return classes.join(" ");
 }
 
-export function merkurTitle(odds, pinnacle, fair, ev, prev) {
+export function merkurTitle(odds, pinnacle, fair, ev, prev, short = "BK") {
   return [
     `Pinnacle ${fmtOdds(pinnacle)}`,
     `fer ${fmtOdds(fair)}`,
     `razlika ${fmtEv(ev)}`,
-    prev && prev !== odds ? `prethodna MX ${fmtOdds(prev)}` : null,
+    prev && prev !== odds ? `prethodna ${short} ${fmtOdds(prev)}` : null,
   ].filter(Boolean).join(" · ");
 }
 

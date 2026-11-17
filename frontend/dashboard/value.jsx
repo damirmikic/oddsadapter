@@ -2,15 +2,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { readStored, writeStored } from "./api.js";
 import { evClass, fmt2, fmtEv, fmtKickoffShort, fmtMargins, fmtOdds, marketLine } from "./format.js";
-import { CompBadge, DerivedTag, KickoffWarning, ModeledTag, StaleTag } from "./ui.jsx";
+import { CompBadge, DerivedTag, KickoffWarning, ModeledTag, StaleTag, useBookie } from "./ui.jsx";
 import { ChangeTimes } from "./priceHistory.jsx";
 import { SportIcon } from "./menu.jsx";
 import { MarkCell, markKey, useMarks } from "./marks.jsx";
 
 export const VALUE_LEVELS = [
-  ["all", "MX > Pinnacle"],
-  ["fair", "MX ≥ fer"],
-  ["0.02", "MX ≥ fer +2%"],
+  ["all", "Kvota > Pinnacle"],
+  ["fair", "Kvota ≥ fer"],
+  ["0.02", "Kvota ≥ fer +2%"],
 ];
 
 export const VALUE_GROUPS = [
@@ -50,9 +50,10 @@ export function rangePasses(value, min, max) {
 }
 
 export function ValueRange({ min, max, setMin, setMax, topOnly, setTopOnly }) {
+  const { label } = useBookie();
   return (
     <>
-      <label className="auto" title="Razlika MerkurXtip kvote u odnosu na Pinnacle fer kvotu, u procentima">
+      <label className="auto" title={`Razlika ${label} kvote u odnosu na Pinnacle fer kvotu, u procentima`}>
         Razlika od
         <input type="number" step="0.5" className="range-input" placeholder="−∞" value={min}
           onChange={(e) => setMin(e.target.value)} />
@@ -88,6 +89,7 @@ function SortHeader({ sortKey, sort, setSort, className, title, children }) {
 // Rows of the all-sports screen carry their own `match`, `comp` and `sport` (shown as an icon); onOdds/onSelect get the row too.
 // `sport` is the screen's sport for rows without their own (the key of the shared value marks).
 export function ValueTable({ values, matchesById, competitions, selectedId, onSelect, onOdds, sport: screenSport }) {
+  const { label, short } = useBookie();
   const byComp = useMemo(() => new Map(competitions.map((c) => [c.id, c])), [competitions]);
   const [sort, setSort] = useState(() => {
     const stored = readStored("pb.valueSort", "fair");
@@ -119,15 +121,15 @@ export function ValueTable({ values, matchesById, competitions, selectedId, onSe
             <th className="mc-match">Meč</th>
             <th>Tržište</th>
             <th>Ishod</th>
-            <th className="mc-group">MX</th>
+            <th className="mc-group">{short}</th>
             <th>PIN</th>
             <th>Fer</th>
             <SortHeader sortKey="pin" sort={sort} setSort={setSort} className="mc-group"
-              title="MerkurXtip kvota / Pinnacle kvota − 1">MX vs PIN</SortHeader>
+              title={`${label} kvota / Pinnacle kvota − 1`}>{short} vs PIN</SortHeader>
             <SortHeader sortKey="fair" sort={sort} setSort={setSort}
-              title="MerkurXtip kvota / Pinnacle fer kvota − 1">MX vs fer</SortHeader>
-            <th className="mc-group" title="Marža tržišta MerkurXtip / Pinnacle">Marža MX / PIN</th>
-            <th className="mc-group" title="Poslednja promena kvote kod MerkurXtip i Pinnacle (podebljano: u poslednjih 15 min)">Promena</th>
+              title={`${label} kvota / Pinnacle fer kvota − 1`}>{short} vs fer</SortHeader>
+            <th className="mc-group" title={`Marža tržišta ${label} / Pinnacle`}>Marža {short} / PIN</th>
+            <th className="mc-group" title={`Poslednja promena kvote kod ${label} i Pinnacle (podebljano: u poslednjih 15 min)`}>Promena</th>
             <th className="mc-group" title="Šta je urađeno sa ishodom; komentare vide svi korisnici">Komentar trejdera</th>
           </tr>
         </thead>

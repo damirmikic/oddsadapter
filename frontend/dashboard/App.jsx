@@ -13,6 +13,7 @@ import { AlertsPage, useDropAlerts } from "./alerts.jsx";
 import { ClvPage } from "./clv.jsx";
 import { AllValuePane, collectValues } from "./allValue.jsx";
 import { GlobalSearch, matchesQuery, searchAll } from "./search.jsx";
+import { BookieContext, DEFAULT_BOOKIE } from "./ui.jsx";
 
 const AUTO_OPTIONS = [0, 3, 5, 10, 15, 30, 60, 120, 300];
 const BACKGROUND_SECONDS = 30;
@@ -78,6 +79,7 @@ export default function App() {
   const [apiKeySet, setApiKeySet] = useState(null);
   const [sport, setSport] = useState(initialSport);
   const [board, setBoard] = useState(null);
+  const [bookie, setBookie] = useState(DEFAULT_BOOKIE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [, setCallsToday] = useState(0);
@@ -126,6 +128,7 @@ export default function App() {
       const suffix = mode === "full" ? "?full=1" : mode === "refresh" ? "?refresh=1" : "";
       const data = await requestJson(`/api/board${suffix}`);
       setBoard(data);
+      if (data.bookie) setBookie(data.bookie);
       setCallsToday(data.callsToday);
     } catch (err) {
       setError(err.message);
@@ -388,14 +391,17 @@ export default function App() {
     : { id: null, key: "all", label: "Sve", count: inMissing ? missingTotal : totalCount, active: competition === "all" };
 
 
+  const activeBookie = cur?.bookie || bookie;
+
   return (
+    <BookieContext.Provider value={activeBookie}>
     <div className="app">
       <header className="topbar">
         <div className="brand">
           <span className="logo" aria-hidden="true">P</span>
           <div>
-            <strong>Xtip Monitor</strong>
-            <small>{allValue ? "Value, svi sportovi" : SPORT_VIEWS[sport]?.label || "Fudbal"} · Pinnacle vs MerkurXtip</small>
+            <strong>Odds Monitor</strong>
+            <small>{allValue ? "Value, svi sportovi" : SPORT_VIEWS[sport]?.label || "Fudbal"} · Pinnacle vs {activeBookie.label}</small>
           </div>
         </div>
 
@@ -410,9 +416,9 @@ export default function App() {
           {cur?.merkur && (
             <span
               className={cur.merkur.error ? "status-error" : ""}
-              title={cur.merkur.error || "MerkurXtip ponuda: upareni mečevi / mečevi ovih takmičenja u ponudi"}
+              title={cur.merkur.error || `${activeBookie.label} ponuda: upareni mečevi / mečevi ovih takmičenja u ponudi`}
             >
-              MX {cur.merkur.fetchedAt ? clockFmt.format(new Date(cur.merkur.fetchedAt)) : "—"}
+              {activeBookie.short} {cur.merkur.fetchedAt ? clockFmt.format(new Date(cur.merkur.fetchedAt)) : "—"}
               <em>upareno {cur.merkur.paired}/{cur.merkur.offered}</em>
               {cur.merkur.error && <em>· greška</em>}
             </span>
@@ -429,7 +435,7 @@ export default function App() {
             {theme === "dark" ? "☀" : "☾"}
           </button>
           {pwa.canInstall && (
-            <button type="button" className="button ghost" onClick={pwa.install} title="Instaliraj Xtip Monitor kao aplikaciju">
+            <button type="button" className="button ghost" onClick={pwa.install} title="Instaliraj Odds Monitor kao aplikaciju">
               ⤓ Instaliraj
             </button>
           )}
@@ -552,13 +558,13 @@ export default function App() {
             <div className="filters">
               <div className="segmented view-switch">
                 <button type="button" className={view === "compare" ? "active" : ""} onClick={() => setView("compare")}>
-                  MerkurXtip vs Pinnacle
+                  {activeBookie.label} vs Pinnacle
                 </button>
                 <button
                   type="button"
                   className={view === "value" ? "active" : ""}
                   onClick={() => setView("value")}
-                  title={`${valueList.length} ishoda gde je MX > Pinnacle, od toga ${fairValueCount} gde je MX ≥ fer`}
+                  title={`${valueList.length} ishoda gde je ${activeBookie.short} > Pinnacle, od toga ${fairValueCount} gde je ${activeBookie.short} ≥ fer`}
                 >
                   Value <span className="view-count">{fairValueCount}/{valueList.length}</span>
                 </button>
@@ -566,7 +572,7 @@ export default function App() {
                   type="button"
                   className={view === "missing" ? "active" : ""}
                   onClick={() => setView("missing")}
-                  title="Mečevi koje Pinnacle ima, a MerkurXtip nema"
+                  title={`Mečevi koje Pinnacle ima, a ${activeBookie.label} nema`}
                 >
                   Nedostaju <span className="view-count">{missingTotal}</span>
                 </button>
@@ -732,7 +738,7 @@ export default function App() {
               <span>
                 {a.market}{a.line} {a.side}: {fmtOdds(a.from)} → {fmtOdds(a.to)} (−{a.pct.toFixed(1)}%)
                 {a.mx != null
-                  ? ` · Merkur ${fmtOdds(a.mx)}, prednost ${fmtEv(a.mxEv)}`
+                  ? ` · ${activeBookie.label} ${fmtOdds(a.mx)}, prednost ${fmtEv(a.mxEv)}`
                   : a.nvp ? ` · fer ${fmtOdds(a.nvp)}` : ""}
               </span>
             </button>
@@ -742,5 +748,6 @@ export default function App() {
 
       <footer>Kvote: Pinnacle preko PinnWire · Kvote se mogu promeniti u svakom trenutku.</footer>
     </div>
+    </BookieContext.Provider>
   );
 }

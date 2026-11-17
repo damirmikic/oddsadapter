@@ -1,5 +1,10 @@
 // Small components shared by every sport: competition badge, price, tags and kickoff warning.
+import { createContext, useContext } from "react";
 import { fmtOdds, movement } from "./format.js";
+
+export const DEFAULT_BOOKIE = { name: "bookie", label: "Bookie", short: "BK" };
+export const BookieContext = createContext(DEFAULT_BOOKIE);
+export const useBookie = () => useContext(BookieContext);
 
 export const ML_SIDES = [["home", "1"], ["draw", "X"], ["away", "2"]];
 
@@ -7,11 +12,16 @@ export function CompBadge({ competition }) {
   return <i className={`comp-badge ${competition.badge || competition.key}`} aria-hidden="true">{competition.code}</i>;
 }
 
-const DERIVED_HINT =
-  "Izvedeno: MerkurXtip nema ovu liniju kao dvosmernu igru. Kvota je iz 1X2, dvostruke šanse ili evropskog hendikepa, pa nema marže.";
-
 export function DerivedTag() {
-  return <i className="derived-tag" title={DERIVED_HINT}>izv.</i>;
+  const { label } = useBookie();
+  return (
+    <i
+      className="derived-tag"
+      title={`Izvedeno: ${label} nema ovu liniju kao dvosmernu igru. Kvota je iz 1X2, dvostruke šanse ili evropskog hendikepa, pa nema marže.`}
+    >
+      izv.
+    </i>
+  );
 }
 
 export function ModeledTag() {
@@ -23,9 +33,10 @@ export function ModeledTag() {
 }
 
 export function StaleTag({ gap }) {
+  const { label } = useBookie();
   const text = `${gap > 0 ? "+" : "−"}${Math.abs(gap)}`;
   return (
-    <i className="stale-tag" title={`Glavna linija MerkurXtip se razlikuje od Pinnacle za ${text}: ponuda kasni.`}>
+    <i className="stale-tag" title={`Glavna linija ${label} se razlikuje od Pinnacle za ${text}: ponuda kasni.`}>
       kasni {text}
     </i>
   );
@@ -50,10 +61,11 @@ export function Price({ odds, fair, prev, open, compact }) {
 }
 
 export function KickoffWarning({ diff }) {
+  const { label, short } = useBookie();
   if (!diff) return null;
   return (
-    <span className="kickoff-warn" title="Vreme početka u MerkurXtip ponudi se razlikuje od Pinnacle-a">
-      ⏱ MX {diff > 0 ? "+" : "−"}{Math.abs(diff)} min
+    <span className="kickoff-warn" title={`Vreme početka u ${label} ponudi se razlikuje od Pinnacle-a`}>
+      ⏱ {short} {diff > 0 ? "+" : "−"}{Math.abs(diff)} min
     </span>
   );
 }

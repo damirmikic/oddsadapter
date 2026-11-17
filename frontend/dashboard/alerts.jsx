@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { requestJson } from "./api.js";
 import { LOCALE, evClass, fmtEv, fmtKickoffShort, fmtLine, fmtOdds } from "./format.js";
+import { useBookie } from "./ui.jsx";
 
 const DROP_MARKETS = { moneyline: "Pobednik", spread: "Hendikep", total: "Ukupno" };
 
@@ -111,6 +112,7 @@ const DROP_RECHECK = 15; // seconds, DROP_RECHECK in pinnwire_dashboard.py
 const dropTimeFmt = new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 export function AlertsPage({ alerts, threshold, setThreshold, notify, setNotify, edgeOnly, setEdgeOnly, stream, onClear, onOpen }) {
+  const { label } = useBookie();
   const [sportFilter, setSportFilter] = useState("all");
   const shown = alerts.filter((a) => (sportFilter === "all" || a.sport === sportFilter) && (!edgeOnly || a.mxEv > 0));
   return (
@@ -133,9 +135,9 @@ export function AlertsPage({ alerts, threshold, setThreshold, notify, setNotify,
           <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
           Obaveštenja i zvuk
         </label>
-        <label className="auto" title="Prikaži i javi samo padove gde je MerkurXtip kvota iznad nove Pinnacle fer kvote">
+        <label className="auto" title={`Prikaži i javi samo padove gde je ${label} kvota iznad nove Pinnacle fer kvote`}>
           <input type="checkbox" checked={edgeOnly} onChange={(e) => setEdgeOnly(e.target.checked)} />
-          Samo gde Merkur kasni
+          Samo gde {label} kasni
         </label>
         <button type="button" className="button ghost" onClick={onClear} disabled={!alerts.length}>Obriši listu</button>
       </div>
@@ -144,14 +146,14 @@ export function AlertsPage({ alerts, threshold, setThreshold, notify, setNotify,
       )}
       {!shown.length ? (
         <p className="state">
-          Nema padova od {threshold}% ili više{edgeOnly ? " sa Merkur prednošću" : ""}. Padovi stižu uživo preko PinnWire
+          Nema padova od {threshold}% ili više{edgeOnly ? ` sa ${label} prednošću` : ""}. Padovi stižu uživo preko PinnWire
           streama (posle {DROP_RECHECK} s provere da kvota nije vraćena) i čuvaju se dok je stranica otvorena.
         </p>
       ) : (
         <div className="board-scroll">
           <table className="board alerts-table">
             <thead>
-              <tr><th>Vreme</th><th>Meč</th><th>Tržište</th><th>Pinnacle</th><th>Pad</th><th>Fer</th><th>Merkur</th><th>Prednost</th></tr>
+              <tr><th>Vreme</th><th>Meč</th><th>Tržište</th><th>Pinnacle</th><th>Pad</th><th>Fer</th><th>{label}</th><th>Prednost</th></tr>
             </thead>
             <tbody>
               {shown.map((a) => (

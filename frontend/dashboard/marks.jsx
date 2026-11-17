@@ -2,6 +2,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { requestJson } from "./api.js";
 import { fmt2 } from "./format.js";
+import { useBookie } from "./ui.jsx";
 
 export const MARK_STATUSES = [
   ["done", "Urađeno"],
@@ -84,6 +85,7 @@ export function markLabel(mark) {
 // Status picker in a Value row: the fixed statuses, or "Ostalo…" with a note of one's own.
 // Render it with key={markKey(...) + mark status/note} so a mark changed by someone else resets the local draft.
 export function MarkCell({ sport, value, match, mark }) {
+  const { short } = useBookie();
   const [custom, setCustom] = useState(mark?.status === "custom");
   const [note, setNote] = useState(mark?.status === "custom" ? mark.note : "");
   const key = markKey(sport, value);
@@ -106,7 +108,7 @@ export function MarkCell({ sport, value, match, mark }) {
   const moved = mark && mark.merkur != null && value.merkur != null && Math.abs(mark.merkur - value.merkur) > 1e-9;
   const title = mark
     ? `${markLabel(mark)} · ${new Date(mark.at).toLocaleString("sr-RS")}${mark.user ? ` · ${mark.user}` : ""}` +
-      (mark.merkur != null ? ` · MX kvota pri označavanju ${fmt2(mark.merkur)}` : "")
+      (mark.merkur != null ? ` · ${short} kvota pri označavanju ${fmt2(mark.merkur)}` : "")
     : "Označi šta je urađeno sa ovim ishodom (vide svi korisnici)";
   return (
     <div className="mark-cell" title={title} onClick={(event) => event.stopPropagation()}>
@@ -120,7 +122,7 @@ export function MarkCell({ sport, value, match, mark }) {
           onChange={(event) => setNote(event.target.value)} onBlur={saveNote}
           onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()} />
       )}
-      {moved && <small className="mark-moved">MX kvota promenjena ({fmt2(mark.merkur)} → {fmt2(value.merkur)})</small>}
+      {moved && <small className="mark-moved">{short} kvota promenjena ({fmt2(mark.merkur)} → {fmt2(value.merkur)})</small>}
     </div>
   );
 }

@@ -17,6 +17,7 @@ class ExampleBookieAdapter(bookie_adapter.BookieAdapter):
 
     name = "example"
     label = "ExampleBookie"
+    short = "EX"
 
     # Map your bookie's league IDs/codes to PinnWire `league_id`s for tracked-league sports.
     # (Tennis, MMA, and Handball/Volleyball pair across all leagues without a competition map.)

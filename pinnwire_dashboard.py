@@ -578,6 +578,7 @@ class DashboardState(common.SnapshotState):
             "changed": self.changed,
             "callsToday": self.history.calls_today(),
             "values": sorted(values, key=lambda v: v["ev"], reverse=True),
+            "bookie": self.bookie.meta(),
             "merkur": {
                 "fetchedAt": self.merkur.stamp,
                 "error": self.merkur.error,
@@ -1000,7 +1001,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/status":
                 return self.send_json(200, {"apiKeySet": bool(current_api_key()),
-                                            "callsToday": STATE.history.calls_today()})
+                                            "callsToday": STATE.history.calls_today(),
+                                            "bookie": STATE.bookie.meta()})
             if path == "/api/clv":
                 return self.send_json(200, clv_response(query))
             if path == "/api/history":

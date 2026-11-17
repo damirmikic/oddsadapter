@@ -1,7 +1,7 @@
 // Football boards: Pinnacle board and the MerkurXtip vs Pinnacle comparison board.
 import { useMemo } from "react";
 import { fmt2, fmtKickoffShort, fmtLimit, fmtLine, fmtOdds, merkurClass, merkurTitle, pinnacleClass, timeFmt } from "../format.js";
-import { CompBadge, KickoffWarning, ML_SIDES, Price } from "../ui.jsx";
+import { CompBadge, KickoffWarning, ML_SIDES, Price, useBookie } from "../ui.jsx";
 
 function OpenDelta({ match }) {
   if (!match.open || !match.ml) return <span className="muted">—</span>;
@@ -115,6 +115,7 @@ export function BoardTable({ groups, competitions, selectedId, fetchedAt, onSele
 }
 
 function CompareRow({ match, selected, onSelect, onOdds, pinStamp, mxStamp }) {
+  const { label, short } = useBookie();
   const x = match.merkur;
   // colour only moves from the latest refresh
   const pinPrev = pinStamp && match.changedAt === pinStamp ? match.prev : null;
@@ -159,11 +160,11 @@ function CompareRow({ match, selected, onSelect, onOdds, pinStamp, mxStamp }) {
         return (
           <td key={`m${side}`} className={`mc-odds mc-click${i === 0 ? " mc-group" : ""}`} onClick={oddsClick}>
             {odds ? (
-              <span className={`mc-cell ${merkurClass(odds, pin, ev, prev)}`} title={merkurTitle(odds, pin, match.ml?.[side]?.fair, ev, prev)}>
+              <span className={`mc-cell ${merkurClass(odds, pin, ev, prev)}`} title={merkurTitle(odds, pin, match.ml?.[side]?.fair, ev, prev, short)}>
                 {fmt2(odds)}
               </span>
             ) : (
-              <span className="muted" title={x ? "MerkurXtip nema 1X2" : "Nije u ponudi MerkurXtip"}>—</span>
+              <span className="muted" title={x ? `${label} nema 1X2` : `Nije u ponudi ${label}`}>—</span>
             )}
           </td>
         );
@@ -176,6 +177,7 @@ function CompareRow({ match, selected, onSelect, onOdds, pinStamp, mxStamp }) {
 const OU = [["over", "V"], ["under", "M"]];
 
 function GoalCells({ goals, pinStamp, mxStamp, onClick }) {
+  const { label, short } = useBookie();
   if (!goals) {
     return <td className="mc-line mc-group-strong" colSpan={7}><span className="muted">—</span></td>;
   }
@@ -207,11 +209,11 @@ function GoalCells({ goals, pinStamp, mxStamp, onClick }) {
         return (
           <td key={`gm${side}`} className={`mc-odds mc-click${i === 0 ? " mc-group" : ""}`} onClick={onClick}>
             {odds ? (
-              <span className={`mc-cell ${merkurClass(odds, pin, ev, prev)}`} title={merkurTitle(odds, pin, goals.fair[side], ev, prev)}>
+              <span className={`mc-cell ${merkurClass(odds, pin, ev, prev)}`} title={merkurTitle(odds, pin, goals.fair[side], ev, prev, short)}>
                 {fmt2(odds)}
               </span>
             ) : (
-              <span className="muted" title="MerkurXtip nema ovu liniju">—</span>
+              <span className="muted" title={`${label} nema ovu liniju`}>—</span>
             )}
           </td>
         );
@@ -221,6 +223,7 @@ function GoalCells({ goals, pinStamp, mxStamp, onClick }) {
 }
 
 export function CompareTable({ matches, selectedId, onSelect, onOdds, pinStamp, mxStamp }) {
+  const { label } = useBookie();
   return (
     <div className="board-scroll mc-wrap">
       <table className="mc-board">
@@ -229,11 +232,11 @@ export function CompareTable({ matches, selectedId, onSelect, onOdds, pinStamp, 
             <th rowSpan={2} className="mc-match">Meč</th>
             <th colSpan={3} className="mc-group">Pinnacle no-vig</th>
             <th colSpan={3} className="mc-group">Pinnacle</th>
-            <th colSpan={3} className="mc-group">MerkurXtip</th>
+            <th colSpan={3} className="mc-group">{label}</th>
             <th className="mc-line mc-group-strong">Golovi</th>
             <th colSpan={2} className="mc-group">No-vig</th>
             <th colSpan={2} className="mc-group">Pinnacle</th>
-            <th colSpan={2} className="mc-group">MerkurXtip</th>
+            <th colSpan={2} className="mc-group">{label}</th>
           </tr>
           <tr className="mc-sub">
             {["f", "p", "m"].map((group) =>

@@ -610,6 +610,7 @@ class BasketballState(common.SnapshotState):
             "changed": self.changed,
             "callsToday": self.history.calls_today(),
             "values": sorted(values, key=lambda v: v["ev"], reverse=True),
+            "bookie": self.bookie.meta(),
             "merkur": {
                 "fetchedAt": self.merkur.stamp,
                 "error": self.merkur.error,

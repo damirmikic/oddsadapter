@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { requestJson } from "./api.js";
 import { fmt2, fmtOdds, fmtWhen } from "./format.js";
+import { useBookie } from "./ui.jsx";
 
 export const histKey = (period, group, line, key) => `${period}|${group}|${line ?? ""}|${key}`;
 
@@ -79,6 +80,7 @@ const CHART_H = 170;
 const CHART_PAD = { top: 12, right: 44, bottom: 22, left: 40 };
 
 export function PriceChart({ points, label }) {
+  const bookie = useBookie();
   const [hover, setHover] = useState(null); // epoch s under the pointer
   // drawn at the real pixel width, so the axis text keeps its size in the narrow panel and the wide modal
   const figure = useRef(null);
@@ -115,7 +117,7 @@ export function PriceChart({ points, label }) {
         <b>{label}</b>
         <span className="legend">
           <span><i className="lg-pin" />Pinnacle</span>
-          <span><i className="lg-mx" />MerkurXtip</span>
+          <span><i className="lg-mx" />{bookie.label}</span>
           <span><i className="lg-fair" />Pinnacle fer</span>
         </span>
       </figcaption>

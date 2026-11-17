@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { readStored, requestJson, writeStored } from "./api.js";
 import { LOCALE, evClass, fmtEv, fmtLine, fmtOdds } from "./format.js";
+import { useBookie } from "./ui.jsx";
 
 const CLV_SPORTS = { football: "Fudbal", basketball: "Košarka", tennis: "Tenis", hockey: "Hokej", mma: "MMA", handball: "Rukomet i odbojka" };
 
@@ -52,6 +53,11 @@ export function ClvPage() {
   }, [days, sport]);
   if (error) return <p className="state error">{error}</p>;
   if (!data) return <p className="state">Učitavanje…</p>;
+  return <ClvContent data={data} days={days} setDays={setDays} sport={sport} setSport={setSport} />;
+}
+
+function ClvContent({ data, days, setDays, sport, setSport }) {
+  const { label } = useBookie();
   const total = data.total;
   return (
     <div className="alerts-page">
@@ -69,7 +75,7 @@ export function ClvPage() {
         </div>
       </div>
       <p className="state clv-summary">
-        Signal je ishod gde je MerkurXtip kvota bar {fmtEv(data.minEv)} iznad Pinnacle fer kvote kad ga je dashboard prvi put video.
+        Signal je ishod gde je {label} kvota bar {fmtEv(data.minEv)} iznad Pinnacle fer kvote kad ga je dashboard prvi put video.
         CLV = kvota pri signalu / poslednja Pinnacle fer kvota pre početka − 1. Zatvorenih: <b>{total.n}</b>
         {total.n > 0 && <> · prosečan CLV <span className={`ev-chip ${evClass(total.clv)}`}>{fmtEv(total.clv)}</span> · pozitivnih {Math.round(total.positive * 100)}%</>}
         {" "}· čeka početak meča: {data.pending}
@@ -82,7 +88,7 @@ export function ClvPage() {
         <div className="board-scroll">
           <table className="board clv-table">
             <thead>
-              <tr><th>Viđeno</th><th>Meč</th><th>Tržište</th><th>Merkur</th><th>Fer pri signalu</th><th>Zatvaranje</th><th>CLV</th></tr>
+              <tr><th>Viđeno</th><th>Meč</th><th>Tržište</th><th>{label}</th><th>Fer pri signalu</th><th>Zatvaranje</th><th>CLV</th></tr>
             </thead>
             <tbody>
               {data.recent.map((r) => (

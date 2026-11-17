@@ -73,6 +73,10 @@ class BookieAdapter:
     name = "base"
     aliases = ()
     label = "Bookie"
+    short = "BK"
+
+    def meta(self):
+        return {"name": self.name, "label": self.label, "short": self.short or self.label[:3].upper()}
 
     def offer(self, sport):
         """Return a list of normalized offer rows for `sport`."""
@@ -155,6 +159,7 @@ class MerkurAdapter(BookieAdapter):
     name = "merkurxtip"
     aliases = ("merkur", "mx")
     label = "MerkurXtip"
+    short = "MX"
 
     _OFFER_PATHS = {
         "football": mx.OFFER_PATH,
