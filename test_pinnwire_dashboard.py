@@ -1951,7 +1951,7 @@ class BookieAdapterTests(unittest.TestCase):
         )
         self.assertEqual(
             {b["name"] for b in bookie_adapter.adapter_catalog()},
-            {"maxbet", "merkurxtip", "oktagon", "betole", "brazilbet", "soccerbet", "admiralbet"},
+            {"maxbet", "merkurxtip", "oktagon", "betole", "brazilbet", "soccerbet", "admiralbet", "balkanbet"},
         )
         with mock.patch.dict(os.environ, {"ODDS_BOOKIE": "example"}):
             self.assertIsInstance(bookie_adapter.get_adapter(), bookie_example.ExampleBookieAdapter)
@@ -2002,6 +2002,109 @@ class BookieAdapterTests(unittest.TestCase):
         bb_board = bb_state.board()
         self.assertEqual(bb_board["book"]["paired"], 1)
         self.assertEqual(bb_board["matches"][0]["book"]["ml"]["home"]["odds"], 2.10)
+
+
+class BalkanBetAdapterTests(unittest.TestCase):
+    def test_decode_football_basketball_tennis_hockey_handball(self):
+        import balkanbet_adapter as bba
+
+        adapter = bookie_adapter.get_adapter("balkanbet")
+        self.assertIsInstance(adapter, bba.BalkanBetAdapter)
+        self.assertTrue(adapter.supports_match)
+
+        def mkt(mid, outcomes, sv=None, fav=False, active=1):
+            return {
+                "marketId": mid,
+                "active": active,
+                "specialValues": sv or [],
+                "favourite": fav,
+                "outcomes": [{"shortcut": sc, "odd": odd, "active": 1} for sc, odd in outcomes],
+            }
+
+        fb_row = {
+            "id": 101,
+            "home": "Alaves",
+            "away": "Villarreal",
+            "kickOffTime": KICKOFF_MS,
+            "live": False,
+            "_markets": [
+                mkt(6, [("1", 3.40), ("0", 3.45), ("2", 2.10)]),
+                mkt(368, [("10", 1.71), ("02", 1.31)]),
+                mkt(389, [("1", 2.30), ("2", 1.49)]),
+                mkt(443, [("2", 1.30), ("01", 3.10), ("3", 2.00), ("02", 1.80)]),
+                mkt(728, [("1", 6.90), ("2", 1.30)], sv=["0:1"]),
+                mkt(728, [("1", 1.70), ("2", 3.65)], sv=["1:0"]),
+                mkt(419, [("0", 3.20), ("1", 1.32), ("01", 1.55), ("2", 2.35)]),
+                mkt(371, [("1", 3.80), ("0", 2.15), ("2", 2.75)]),
+                mkt(380, [("10", 1.45), ("02", 1.25)]),
+                mkt(428, [("0", 2.80), ("1", 1.40), ("01", 1.35), ("2", 3.10)]),
+            ],
+        }
+        fb = adapter.decode_markets("football", fb_row)
+        self.assertEqual(fb[0]["ml"], {"home": 3.40, "draw": 3.45, "away": 2.10})
+        self.assertEqual(fb[0]["totals"], {1.5: {"over": 1.30, "under": 3.10}, 2.5: {"over": 2.00, "under": 1.80}})
+        self.assertEqual(fb[0]["spreads"][0.0], {"home": 2.30, "away": 1.49})
+        self.assertEqual(fb[0]["spreads"][-0.5], {"home": 3.40, "away": 1.31})
+        self.assertEqual(fb[0]["spreads"][0.5], {"home": 1.71, "away": 2.10})
+        self.assertEqual(fb[0]["spreads"][-1.5], {"home": 6.90})
+        self.assertEqual(fb[0]["spreads"][1.5], {"away": 3.65})
+        self.assertIn(-1.5, fb[0]["derived"])
+        self.assertEqual(fb[0]["teamTotals"]["home"][0.5], {"over": 1.32, "under": 3.20})
+        self.assertEqual(fb[1]["ml"], {"home": 3.80, "draw": 2.15, "away": 2.75})
+        self.assertEqual(fb[1]["totals"][0.5], {"over": 1.40, "under": 2.80})
+
+        bb_row = {
+            "id": 102,
+            "home": "Uralmash",
+            "away": "Lokomotiv",
+            "kickOffTime": KICKOFF_MS,
+            "live": False,
+            "_markets": [
+                mkt(60, [("1", 2.60), ("2", 1.38)]),
+                mkt(524, [("1", 1.84), ("2", 1.87)], sv=["5.5"], fav=True),
+                mkt(524, [("1", 1.99), ("2", 1.73)], sv=["4.0"]),  # whole-number line dropped
+                mkt(530, [("1", 1.85), ("2", 1.85)], sv=["166.5"], fav=True),
+            ],
+        }
+        bb_dec = adapter.decode_markets("basketball", bb_row, "ft")
+        self.assertEqual(bb_dec["ml"], {"home": 2.60, "away": 1.38})
+        self.assertEqual(bb_dec["spreads"], {5.5: {"home": 1.84, "away": 1.87}})
+        self.assertEqual(bb_dec["totals"], {166.5: {"over": 1.85, "under": 1.85}})
+        self.assertEqual(bb_dec["main"]["spreads"], 5.5)
+        self.assertEqual(bb_dec["main"]["totals"], 166.5)
+
+        tn_row = {
+            "id": 103,
+            "home": "Player A",
+            "away": "Player B",
+            "kickOffTime": KICKOFF_MS,
+            "live": False,
+            "_markets": [
+                mkt(1955, [("1", 1.68), ("2", 2.05)]),
+                mkt(1958, [("1", 2.55), ("2", 1.45)], sv=["-1.50"]),
+                mkt(342, [("1", 1.85), ("2", 1.85)], sv=["-2.5"]),
+                mkt(348, [("1", 1.90), ("2", 1.80)], sv=["21.5"]),
+                mkt(2030, [("2", 1.50), ("3", 2.40)]),
+            ],
+        }
+        tn_dec = adapter.decode_markets("tennis", tn_row, "ft")
+        self.assertEqual(tn_dec["ml"], {"home": 1.68, "away": 2.05})
+        self.assertEqual(tn_dec["setspreads"], {-1.5: {"home": 2.55, "away": 1.45}})
+        self.assertEqual(tn_dec["spreads"], {-2.5: {"home": 1.85, "away": 1.85}})
+        self.assertEqual(tn_dec["totals"], {21.5: {"over": 1.80, "under": 1.90}})
+        self.assertEqual(tn_dec["settotals"], {2.5: {"over": 2.40, "under": 1.50}})
+
+        vb_row = {
+            "id": 104,
+            "home": "Team A",
+            "away": "Team B",
+            "kickOffTime": KICKOFF_MS,
+            "live": False,
+            "sport": handball.VOLLEYBALL,
+            "_markets": [mkt(84, [("1", 1.55), ("2", 2.30)])],
+        }
+        vb_dec = adapter.decode_markets("handball", vb_row, "ft")
+        self.assertEqual(vb_dec["ml"], {"home": 1.55, "away": 2.30})
 
 
 if __name__ == "__main__":

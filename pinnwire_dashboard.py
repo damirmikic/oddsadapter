@@ -24,6 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
 import admiralbet_adapter  # noqa: F401 (registers AdmiralBetAdapter)
+import balkanbet_adapter  # noqa: F401 (registers BalkanBetAdapter)
 import applog
 import basketball as bb
 import bookie_adapter
