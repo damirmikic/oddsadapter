@@ -1,9 +1,9 @@
-"""Closing line value of the MerkurXtip prices the dashboard flagged as value.
+"""Closing line value of the bookie prices the dashboard flagged as value.
 
-A signal is an outcome whose MerkurXtip price beat Pinnacle's fair price by at least `MIN_EV` the first time the
-dashboard saw it. Every later board keeps the latest Pinnacle fair price (and MerkurXtip price) of that outcome until
-the match starts, so the last one seen is the closing line. CLV = signal MerkurXtip price / closing fair price - 1:
-above zero means MerkurXtip offered more than Pinnacle finally thought fair. Stored in SQLite (stdlib), because the
+A signal is an outcome whose bookie price beat Pinnacle's fair price by at least `MIN_EV` the first time the
+dashboard saw it. Every later board keeps the latest Pinnacle fair price (and the bookie price) of that outcome until
+the match starts, so the last one seen is the closing line. CLV = signal bookie price / closing fair price - 1:
+above zero means the bookie offered more than Pinnacle finally thought fair. Stored in SQLite (stdlib), because the
 history must outlive the matches, which the JSON history drops once they start.
 
 This module must not import `pinnwire_dashboard` (run as a script that module is `__main__`).
@@ -14,6 +14,8 @@ import os
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
+
+import store_migrate
 
 MIN_EV = 0.02  # a value outcome becomes a signal from this edge over Pinnacle's fair price
 FRESH_MINUTES = 30  # a closing line counts when it was seen at most this long before kickoff
@@ -27,8 +29,8 @@ CREATE TABLE IF NOT EXISTS signals (
     starts TEXT NOT NULL,
     period TEXT NOT NULL, grp TEXT NOT NULL, line REAL, outcome TEXT NOT NULL, label TEXT,
     seen_at TEXT NOT NULL,
-    merkur REAL NOT NULL, pinnacle REAL NOT NULL, fair REAL NOT NULL, ev REAL NOT NULL,
-    close_at TEXT, close_fair REAL, close_pinnacle REAL, close_merkur REAL
+    book REAL NOT NULL, pinnacle REAL NOT NULL, fair REAL NOT NULL, ev REAL NOT NULL,
+    close_at TEXT, close_fair REAL, close_pinnacle REAL, close_book REAL
 );
 CREATE INDEX IF NOT EXISTS signals_starts ON signals (starts);
 """
@@ -53,6 +55,8 @@ class ClvStore:
         self.open = {}  # sport -> signatures of signals known to the store (loaded lazily, never pruned: tiny)
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
+            # files written before the bookie-neutral names
+            store_migrate.rename_columns(self.db, "signals", {"merkur": "book", "close_merkur": "close_book"})
 
     # ----- recording
     def _known_sigs(self, sport, now):
@@ -65,7 +69,7 @@ class ClvStore:
         """Record signals and update closing lines from one board.
 
         `matches`: [{id, home, away, league, starts, rows: [(period, compare row)]}], upcoming matches only.
-        A compare row is {group, line, outcomes: [{key, label, merkur, pinnacle, fair, ev}], modeled?}."""
+        A compare row is {group, line, outcomes: [{key, label, book, pinnacle, fair, ev}], modeled?}."""
         now = now or stamp()
         added = 0
         with self.lock, self.db:
@@ -80,15 +84,15 @@ class ClvStore:
                         sig = signature(m["id"], period, row["group"], row["line"], o["key"])
                         if sig in known:
                             self.db.execute(
-                                "UPDATE signals SET close_at = ?, close_fair = ?, close_pinnacle = ?, close_merkur = ? "
-                                "WHERE sig = ?", (now, o["fair"], o["pinnacle"], o["merkur"], sig))
+                                "UPDATE signals SET close_at = ?, close_fair = ?, close_pinnacle = ?, close_book = ? "
+                                "WHERE sig = ?", (now, o["fair"], o["pinnacle"], o["book"], sig))
                         elif o["ev"] >= MIN_EV:
                             cur = self.db.execute(
                                 "INSERT OR IGNORE INTO signals (sig, sport, event_id, home, away, league, starts, period, "
-                                "grp, line, outcome, label, seen_at, merkur, pinnacle, fair, ev) "
+                                "grp, line, outcome, label, seen_at, book, pinnacle, fair, ev) "
                                 "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                                 (sig, sport, str(m["id"]), m["home"], m["away"], m["league"], m["starts"], period,
-                                 row["group"], row["line"], o["key"], o["label"], now, o["merkur"], o["pinnacle"],
+                                 row["group"], row["line"], o["key"], o["label"], now, o["book"], o["pinnacle"],
                                  o["fair"], o["ev"]))
                             if cur.rowcount:
                                 known.add(sig)
@@ -118,14 +122,14 @@ class ClvStore:
 
         def grouped(column):
             rows = self.db.execute(
-                f"SELECT {column} AS name, COUNT(*) AS n, AVG(merkur / close_fair - 1) AS clv, "
-                f"AVG(merkur / close_fair - 1 > 0) AS positive, AVG(ev) AS ev FROM signals WHERE {closed} "
+                f"SELECT {column} AS name, COUNT(*) AS n, AVG(book / close_fair - 1) AS clv, "
+                f"AVG(book / close_fair - 1 > 0) AS positive, AVG(ev) AS ev FROM signals WHERE {closed} "
                 f"GROUP BY {column} ORDER BY n DESC", params).fetchall()
             return [self._round(dict(r)) for r in rows]
 
         with self.lock:
             total = self.db.execute(
-                f"SELECT COUNT(*) AS n, AVG(merkur / close_fair - 1) AS clv, AVG(merkur / close_fair - 1 > 0) AS positive, "
+                f"SELECT COUNT(*) AS n, AVG(book / close_fair - 1) AS clv, AVG(book / close_fair - 1 > 0) AS positive, "
                 f"AVG(ev) AS ev FROM signals WHERE {closed}", params).fetchone()
             pending = self.db.execute(
                 f"SELECT COUNT(*) FROM signals WHERE {scope} AND starts > :now", params).fetchone()[0]
@@ -133,7 +137,7 @@ class ClvStore:
                 f"SELECT COUNT(*) FROM signals WHERE {scope} AND starts <= :now AND NOT ({self._closed_where()})",
                 params).fetchone()[0]
             recent = self.db.execute(
-                f"SELECT *, CASE WHEN {self._closed_where()} THEN merkur / close_fair - 1 END AS clv "
+                f"SELECT *, CASE WHEN {self._closed_where()} THEN book / close_fair - 1 END AS clv "
                 f"FROM signals WHERE {scope} ORDER BY seen_at DESC LIMIT 200", params).fetchall()
             return {
                 "days": days, "minEv": MIN_EV,

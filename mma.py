@@ -1,14 +1,14 @@
-"""MMA board: Pinnacle (PinnWire sport 8) against the MerkurXtip MMA offer (feed letter "MM").
+"""MMA board: Pinnacle (PinnWire sport 8) against the bookie MMA offer (feed letter "MM").
 
 PinnWire quotes a fight in period 0 only: the winner (two-way) and total rounds, usually one line (1.5 or 2.5).
-MerkurXtip sells the winner as "W1" / "W2" (264 / 265), rounds over/under with the line in `params.our`, and
+The bookie sells the winner as "W1" / "W2" (264 / 265), rounds over/under with the line in `params.our`, and
 method of victory and "goes the distance" markets that Pinnacle does not price, so only the winner and total
 rounds are compared. Lines are matched exactly, no model.
 
 Both books order the fighters as they like (often the other way round), so a fight pairs in either order and a
-reversed MerkurXtip row is flagged `pinSwapped`: its winner prices are read the other way round. Every PinnWire
+reversed bookie row is flagged `pinSwapped`: its winner prices are read the other way round. Every PinnWire
 MMA league is shown (the promotion is the competition) and fights pair by fighter names and kickoff within 12 h,
-with no competition check: Pinnacle gives the card's start time, MerkurXtip each fight's own.
+with no competition check: Pinnacle gives the card's start time, the bookie each fight's own.
 Everything else (state, delta merging, board shape) is shared with basketball.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ import re
 
 import basketball as bb
 import common
-import bookie_client as mx
+import bookie_client as bk
 import pinnwire_client as pw
 import tennis
 
@@ -25,14 +25,14 @@ SPORT_ID = 8
 OFFER_PATH = "/restapi/custom/offer/sr/sport/MM/mob"
 MIN_PAIR_SCORE = 0.75
 PAIR_WINDOW = 12 * 60
-SWAPPED = bb.SWAPPED  # MerkurXtip row whose fighters are in the reverse of Pinnacle's order
+SWAPPED = bb.SWAPPED  # The bookie row whose fighters are in the reverse of Pinnacle's order
 
 ML = ("264", "265")  # "$h pobeđuje na meču" / "$a pobeđuje na meču"
 # (line param, over code, under code)
 ROUNDS = [("our", "54291", "54290")]
 
 GROUPS = [
-    # key in pinnacle_markets()/merkur_markets(), group label, outcome sides
+    # key in pinnacle_markets()/book_markets(), group label, outcome sides
     ("ml", "Pobednik", (("home", "1"), ("away", "2"))),
     ("totals", "Ukupno rundi", (("over", "Više"), ("under", "Manje"))),
 ]
@@ -49,7 +49,7 @@ PROMOTIONS = [
 OTHER_PROMOTION = ("", "MMA", "mma")
 COUNTRY = "Organizacije"  # the side menu groups competitions by this label
 
-# MerkurXtip fighter name (normalised) -> the PinnWire name of the same fighter, for names the token rules
+# The bookie fighter name (normalised) -> the PinnWire name of the same fighter, for names the token rules
 # cannot pair (a fighter listed under a maiden or married name).
 ALIASES = {
     "kunitskaya yana": "yana santos",
@@ -59,7 +59,7 @@ ALIASES = {
 # ------------------------------------------------------------------------- decoding
 
 def pinnacle_markets(event):
-    """Pinnacle prices keyed like merkur_markets(): ml {side: odds}, totals {line: {side: odds}}."""
+    """Pinnacle prices keyed like book_markets(): ml {side: odds}, totals {line: {side: odds}}."""
     markets = pw.period(event, 0)
     ml = pw.priced(markets.get("money_line") or {}, ("home", "away"))
     return {
@@ -74,28 +74,28 @@ def pinnacle_limits(event):
     return {"totals": pw.ladder_limits(pw.period(event, 0).get("totals"), "points")}
 
 
-def merkur_markets(row):
-    """One MerkurXtip MMA offer row -> the same shape as pinnacle_markets(), in Pinnacle's fighter order."""
+def book_markets(row):
+    """One bookie MMA offer row -> the same shape as pinnacle_markets(), in Pinnacle's fighter order."""
     home, away = ML[::-1] if row.get(SWAPPED) else ML
     return {
-        "ml": mx._pick(row.get("odds") or {}, {"home": home, "away": away}),
+        "ml": bk._pick(row.get("odds") or {}, {"home": home, "away": away}),
         "totals": common.param_lines(row, ROUNDS, ("over", "under")),
     }
 
 
 # ------------------------------------------------------------------------- comparison
 
-def compare(pin, merkur, limits=None):
+def compare(pin, book, limits=None):
     """Every market both books price at the same line, as compare rows."""
     rows = []
     for key, group, labels in GROUPS:
         if key == "ml":
-            if pin["ml"] and merkur["ml"]:
-                rows.append(common.compare_row(group, None, labels, merkur["ml"], pin["ml"]))
+            if pin["ml"] and book["ml"]:
+                rows.append(common.compare_row(group, None, labels, book["ml"], pin["ml"]))
             continue
-        for line in sorted(merkur[key]):
+        for line in sorted(book[key]):
             if line in pin[key]:
-                rows.append(common.compare_row(group, line, labels, merkur[key][line], pin[key][line],
+                rows.append(common.compare_row(group, line, labels, book[key][line], pin[key][line],
                                                (limits or {}).get(key, {}).get(line)))
     for r in rows:
         r["period"] = "ft"
@@ -108,13 +108,13 @@ PREFIXES = {"ft": ""}
 
 # ------------------------------------------------------------------------- pairing
 
-def fighter_score(pinnacle, merkur):
+def fighter_score(pinnacle, book):
     """0..1 for one fighter: "Zachary Reese" against "Reese, Zach" (tennis rules, plus the MMA aliases)."""
-    return tennis.player_score(pinnacle, ALIASES.get(" ".join(mx.norm_tokens(merkur)), merkur))
+    return tennis.player_score(pinnacle, ALIASES.get(" ".join(bk.norm_tokens(book)), book))
 
 
-def pair_inputs(events, offer, is_prematch=mx.is_prematch):
-    # every MerkurXtip fight is offered in both fighter orders; pair() keeps one per offer id
+def pair_inputs(events, offer, is_prematch=bk.is_prematch):
+    # every bookie fight is offered in both fighter orders; pair() keeps one per offer id
     pin = [{"id": str(e["event_id"]), "comp": "MM", "home": e.get("home", ""), "away": e.get("away", ""),
             "ts": bb.event_ts(e)} for e in events]
     mer = []
@@ -127,20 +127,20 @@ def pair_inputs(events, offer, is_prematch=mx.is_prematch):
     return pin, mer
 
 
-def pair_events(events, offer, is_prematch=mx.is_prematch):
+def pair_events(events, offer, is_prematch=bk.is_prematch):
     pin, mer = pair_inputs(events, offer, is_prematch=is_prematch)
     return {pid: (m["row"], score)
-            for pid, (m, score) in mx.pair(pin, mer, PAIR_WINDOW, MIN_PAIR_SCORE, fighter_score).items()}
+            for pid, (m, score) in bk.pair(pin, mer, PAIR_WINDOW, MIN_PAIR_SCORE, fighter_score).items()}
 
 
-def unpaired_hints(events, offer, pairs, is_prematch=mx.is_prematch):
-    """{pinnacle id: closest unused MerkurXtip offer row} for events without a pair, for the "missing" view."""
+def unpaired_hints(events, offer, pairs, is_prematch=bk.is_prematch):
+    """{pinnacle id: closest unused bookie offer row} for events without a pair, for the "missing" view."""
     pin, mer = pair_inputs(events, offer, is_prematch=is_prematch)
-    return mx.hints(pin, mer, pairs, PAIR_WINDOW, fighter_score)
+    return bk.hints(pin, mer, pairs, PAIR_WINDOW, fighter_score)
 
 
-def shape_match(event, hit, decode=merkur_markets):
-    """Board entry of one Pinnacle event, plus its value items from the paired MerkurXtip row."""
+def shape_match(event, hit, decode=book_markets):
+    """Board entry of one Pinnacle event, plus its value items from the paired bookie row."""
     pin = pinnacle_markets(event)
     rows = []
     if hit:

@@ -1,15 +1,15 @@
-"""Handball and volleyball board: Pinnacle (PinnWire sport 10) against the MerkurXtip handball (feed letter "HB")
+"""Handball and volleyball board: Pinnacle (PinnWire sport 10) against the bookie handball (feed letter "HB")
 and volleyball (feed letter "V") offers, one sport on the dashboard.
 
 PinnWire files both under sport 10 and tells them apart only by the lines: a handball total is 20-99 goals, a
-volleyball one 3.5-4.5 sets or well over 100 points (`kind`). A MerkurXtip row says its sport (`sport`), and a match
-pairs only within its sport. Volleyball compares the match winner only: MerkurXtip sells point handicaps and totals,
+volleyball one 3.5-4.5 sets or well over 100 points (`kind`). A bookie row says its sport (`sport`), and a match
+pairs only within its sport. Volleyball compares the match winner only: the bookie sells point handicaps and totals,
 Pinnacle quotes set lines, which share numbers (a 2.5 set handicap, a 2.5 point handicap) but not meaning.
 
-Handball: PinnWire quotes period 0, the game in regulation time: a two-way winner that refunds a draw (MerkurXtip "W1" / "W2"),
+Handball: PinnWire quotes period 0, the game in regulation time: a two-way winner that refunds a draw (the bookie "W1" / "W2"),
 sometimes the three-way 1X2, handicap and totals; the first half (period 1) when it is quoted. Lines are matched
 exactly and only half-point lines are used. No model, like tennis.
-The competitions are the PinnWire leagues ("Serbia - Superliga"), handball leagues are not mapped to MerkurXtip ones:
+The competitions are the PinnWire leagues ("Serbia - Superliga"), handball leagues are not mapped to the bookie ones:
 a match pairs by team names and kickoff within 3 h, a women's side only with a women's side (`common.other_score`).
 Everything else (state, delta merging, board shape) is shared with basketball.
 """
@@ -19,12 +19,12 @@ import re
 
 import basketball as bb
 import common
-import bookie_client as mx
+import bookie_client as bk
 import pinnwire_client as pw
 
 SPORT_ID = 10
 OFFER_PATHS = ["/restapi/custom/offer/sr/sport/HB/mob", "/restapi/custom/offer/sr/sport/V/mob"]
-HANDBALL, VOLLEYBALL = "HB", "V"  # the MerkurXtip sport of each, also the pairing key
+HANDBALL, VOLLEYBALL = "HB", "V"  # the bookie sport of each, also the pairing key
 HANDBALL_TOTALS = (20, 100)  # goals; a volleyball total is 3.5-4.5 sets or 130+ points
 MIN_PAIR_SCORE = common.OTHER_MIN_SCORE
 PAIR_WINDOW = common.OTHER_WINDOW
@@ -34,7 +34,7 @@ PERIODS = [("ft", "Ceo meč", 0), ("h1", "1. poluvreme", 1)]
 NUMBERS = {key: number for key, _, number in PERIODS}
 
 # Each set is (line param, home/over code, away/under code); the param holds the home-side line.
-MX_PERIOD = {
+BOOK_PERIOD = {
     "ft": {
         "ml": ("264", "265"),  # draw no bet
         "x12": ("1", "2", "3"),
@@ -50,7 +50,7 @@ MX_PERIOD = {
 VOLLEYBALL_ML = ("1", "3")  # the match winner; the set and point markets are not compared
 
 GROUPS = [
-    # key in pinnacle_markets()/merkur_markets(), group label, outcome sides
+    # key in pinnacle_markets()/book_markets(), group label, outcome sides
     ("ml", "Pobednik", (("home", "1"), ("away", "2"))),
     ("x12", "1X2", (("home", "1"), ("draw", "X"), ("away", "2"))),
     ("spreads", "Hendikep", (("home", "1"), ("away", "2"))),
@@ -104,7 +104,7 @@ def kind(event):
 # ------------------------------------------------------------------------- decoding
 
 def pinnacle_markets(event, period="ft"):
-    """Pinnacle prices of one period keyed like merkur_markets(): ml / x12 {side: odds}, lines {line: {side: odds}}."""
+    """Pinnacle prices of one period keyed like book_markets(): ml / x12 {side: odds}, lines {line: {side: odds}}."""
     markets = pw.period(event, NUMBERS[period])
     prices = markets.get("money_line") or {}
     three = pw.priced(prices, ("home", "draw", "away"))
@@ -130,17 +130,17 @@ def pinnacle_limits(event, period="ft"):
     }
 
 
-def merkur_markets(row, period="ft"):
-    """One MerkurXtip handball offer row -> the same shape as pinnacle_markets(), for one period."""
+def book_markets(row, period="ft"):
+    """One bookie handball offer row -> the same shape as pinnacle_markets(), for one period."""
     raw = row.get("odds") or {}
     out = dict(EMPTY)
     if row.get("sport") == VOLLEYBALL:
-        out["ml"] = mx._pick(raw, dict(zip(("home", "away"), VOLLEYBALL_ML)))
+        out["ml"] = bk._pick(raw, dict(zip(("home", "away"), VOLLEYBALL_ML)))
         return out
-    codes = MX_PERIOD[period]
+    codes = BOOK_PERIOD[period]
     if "ml" in codes:
-        out["ml"] = mx._pick(raw, dict(zip(("home", "away"), codes["ml"])))
-        out["x12"] = mx._pick(raw, dict(zip(("home", "draw", "away"), codes["x12"])))
+        out["ml"] = bk._pick(raw, dict(zip(("home", "away"), codes["ml"])))
+        out["x12"] = bk._pick(raw, dict(zip(("home", "draw", "away"), codes["x12"])))
     out["spreads"] = common.param_lines(row, codes["spreads"], ("home", "away"), "spreads")
     out["totals"] = common.param_lines(row, codes["totals"], ("over", "under"))
     return out
@@ -148,17 +148,17 @@ def merkur_markets(row, period="ft"):
 
 # ------------------------------------------------------------------------- comparison
 
-def compare(pin, merkur, period="ft", limits=None):
+def compare(pin, book, period="ft", limits=None):
     """Every market both books price at the same line, as compare rows."""
     rows = []
     for key, group, labels in GROUPS:
         if key in ("ml", "x12"):
-            if pin[key] and merkur[key]:
-                rows.append(common.compare_row(group, None, labels, merkur[key], pin[key]))
+            if pin[key] and book[key]:
+                rows.append(common.compare_row(group, None, labels, book[key], pin[key]))
             continue
-        for line in sorted(merkur[key]):
+        for line in sorted(book[key]):
             if line in pin[key]:
-                rows.append(common.compare_row(group, line, labels, merkur[key][line], pin[key][line],
+                rows.append(common.compare_row(group, line, labels, book[key][line], pin[key][line],
                                                (limits or {}).get(key, {}).get(line)))
     for r in rows:
         r["period"] = period
@@ -173,13 +173,13 @@ PREFIXES = {"ft": "", "h1": "1.pol "}
 
 def women(home, away, league):
     """(home, away) with a "W" marker on both when the league or one of the sides says women's, so
-    common.other_score keeps the sexes apart (MerkurXtip may mark only one team, "Kaunas W" against "Avarca")."""
+    common.other_score keeps the sexes apart (the bookie may mark only one team, "Kaunas W" against "Avarca")."""
     if "women" in (league or "").lower() or any("w" in common.side_markers(n) for n in (home, away)):
         return tuple(n if "w" in common.side_markers(n) else f"{n} W" for n in (home, away))
     return home, away
 
 
-def pair_inputs(events, offer, is_prematch=mx.is_prematch):
+def pair_inputs(events, offer, is_prematch=bk.is_prematch):
     pin, mer = [], []
     for e in events:
         home, away = women(e.get("home", ""), e.get("away", ""), e.get("league_name"))
@@ -192,20 +192,20 @@ def pair_inputs(events, offer, is_prematch=mx.is_prematch):
     return pin, mer
 
 
-def pair_events(events, offer, is_prematch=mx.is_prematch):
+def pair_events(events, offer, is_prematch=bk.is_prematch):
     pin, mer = pair_inputs(events, offer, is_prematch=is_prematch)
     return {pid: (m["row"], score)
-            for pid, (m, score) in mx.pair(pin, mer, PAIR_WINDOW, MIN_PAIR_SCORE, common.other_score).items()}
+            for pid, (m, score) in bk.pair(pin, mer, PAIR_WINDOW, MIN_PAIR_SCORE, common.other_score).items()}
 
 
-def unpaired_hints(events, offer, pairs, is_prematch=mx.is_prematch):
-    """{pinnacle id: closest unused MerkurXtip offer row} for events without a pair, for the "missing" view."""
+def unpaired_hints(events, offer, pairs, is_prematch=bk.is_prematch):
+    """{pinnacle id: closest unused bookie offer row} for events without a pair, for the "missing" view."""
     pin, mer = pair_inputs(events, offer, is_prematch=is_prematch)
-    return mx.hints(pin, mer, pairs, PAIR_WINDOW, common.other_score)
+    return bk.hints(pin, mer, pairs, PAIR_WINDOW, common.other_score)
 
 
-def shape_match(event, hit, decode=merkur_markets):
-    """Board entry of one Pinnacle event, plus its value items from the paired MerkurXtip row."""
+def shape_match(event, hit, decode=book_markets):
+    """Board entry of one Pinnacle event, plus its value items from the paired bookie row."""
     pin = pinnacle_markets(event)
     rows, periods = [], {}
     if hit:
@@ -242,10 +242,10 @@ def competition(league_id, name, sport=HANDBALL):
 
 
 class JoinedAPI:
-    """MerkurAPI over both offers: handball and volleyball rows in one list (each row carries its `sport`)."""
+    """BookieAPI over both offers: handball and volleyball rows in one list (each row carries its `sport`)."""
 
-    def __init__(self, base=mx.BASE, label="Bookie"):
-        self.apis = [mx.BookieAPI(offer_path=path, base=base, label=label) for path in OFFER_PATHS]
+    def __init__(self, base=bk.BASE, label="Bookie"):
+        self.apis = [bk.BookieAPI(offer_path=path, base=base, label=label) for path in OFFER_PATHS]
 
     def offer(self):
         rows, errors = [], []
@@ -267,8 +267,8 @@ class HandballState(bb.BasketballState):
     sport_id = SPORT_ID
     offer_path = OFFER_PATHS[0]
 
-    def __init__(self, history, key_fn, merkur=None, bookie=None):
-        super().__init__(history, key_fn, merkur, bookie=bookie)
+    def __init__(self, history, key_fn, book=None, bookie=None):
+        super().__init__(history, key_fn, book, bookie=bookie)
 
     def tracked(self, event):
         return True  # every league

@@ -235,7 +235,7 @@ def drop_key(market, period, side, points):
 
 
 def quote_index(rows_by_period, markets):
-    """{drop_key: MerkurXtip outcome} of compare rows; `rows_by_period` is {PinnWire period number: rows},
+    """{drop_key: the bookie outcome} of compare rows; `rows_by_period` is {PinnWire period number: rows},
     `markets` maps a row group to its drop market (groups not listed are skipped)."""
     out = {}
     for number, rows in rows_by_period.items():
@@ -245,7 +245,7 @@ def quote_index(rows_by_period, markets):
                 continue
             line = None if market == "moneyline" else _num(r["line"])
             for o in r["outcomes"]:
-                out[(market, int(number), line, o["key"])] = {"merkur": o["merkur"], "fair": o["fair"]}
+                out[(market, int(number), line, o["key"])] = {"book": o["book"], "fair": o["fair"]}
     return out
 
 
@@ -295,7 +295,7 @@ def fair_odds(prices):
 
 def allowed_line(line, market):
     """Only half-goal lines (x.5) are kept: quarter and whole lines have push/half-win settlement that
-    MerkurXtip does not sell. The one exception is the level handicap (AH 0), which MerkurXtip sells
+    The bookie does not sell. The one exception is the level handicap (AH 0), which the bookie sells
     as "X vraća ulog" (draw no bet)."""
     if line is None:
         return False

@@ -1,4 +1,4 @@
-"""MerkurXtip prematch offer: fetching, decoding odds codes and pairing with PinnWire events.
+"""The bookie prematch offer: fetching, decoding odds codes and pairing with PinnWire events.
 
 The offer list keys odds by tip-type code (definitions: /restapi/offer/sr/ttg_lang, `betPickMap`
 entries "<code>_S"). Goal totals are sold as ranges: "0-2" is under 2.5 and "3+" is over 2.5.
@@ -103,7 +103,7 @@ class BookieAPI:
 # ------------------------------------------------------------------------- decoding
 
 def is_prematch(row, now_ms=None):
-    """Offer rows still before kickoff. MerkurXtip flags some matches `live` hours early (live betting opens
+    """Offer rows still before kickoff. The bookie flags some matches `live` hours early (live betting opens
     before the start) while their prices are still prematch ones, so only started matches are excluded."""
     now_ms = time.time() * 1000 if now_ms is None else now_ms
     return not row.get("live") or (row.get("kickOffTime") or 0) > now_ms
@@ -325,17 +325,17 @@ def name_score(a, b):
 FAR_KICKOFF = 90
 
 
-def pair(pinnacle, merkur, window_minutes=180, min_score=0.5, score_fn=None):
+def pair(pinnacle, book, window_minutes=180, min_score=0.5, score_fn=None):
     """Pair events one-to-one.
 
-    pinnacle: [{id, comp, home, away, ts}], merkur: [{id, comp, home, away, ts}] (ts in ms).
+    pinnacle: [{id, comp, home, away, ts}], book: [{id, comp, home, away, ts}] (ts in ms).
     Only the same competition with kickoff within the window is considered; the best name score wins.
-    `score_fn(pinnacle name, merkur name)` replaces name_score where a sport needs stricter name rules.
-    Returns {pinnacle id: (merkur row, score)}.
+    `score_fn(pinnacle name, book name)` replaces name_score where a sport needs stricter name rules.
+    Returns {pinnacle id: (book row, score)}.
     """
     score_fn = score_fn or name_score
     by_comp = {}
-    for m in merkur:
+    for m in book:
         by_comp.setdefault(m["comp"], []).append(m)
     scored = []
     min_first = 2 * min_score - 1.0
@@ -363,16 +363,16 @@ def pair(pinnacle, merkur, window_minutes=180, min_score=0.5, score_fn=None):
     return out
 
 
-def closest_unpaired(pinnacle, merkur, pairs, window_minutes=180, score_fn=None):
-    """For each unpaired Pinnacle event the best still-unused MerkurXtip row of the same competition and kickoff window.
+def closest_unpaired(pinnacle, book, pairs, window_minutes=180, score_fn=None):
+    """For each unpaired Pinnacle event the best still-unused bookie row of the same competition and kickoff window.
 
     Rows paired below `min_score` still show up here, which points at team names that need an alias.
-    pairs: the result of pair(). Returns {pinnacle id: (merkur row, score)}.
+    pairs: the result of pair(). Returns {pinnacle id: (book row, score)}.
     """
     score_fn = score_fn or name_score
     used = {m["id"] for m, _ in pairs.values()}
     by_comp = {}
-    for m in merkur:
+    for m in book:
         if m["id"] not in used:
             by_comp.setdefault(m["comp"], []).append(m)
     out = {}
@@ -395,13 +395,13 @@ def closest_unpaired(pinnacle, merkur, pairs, window_minutes=180, score_fn=None)
     return out
 
 
-def hints(pinnacle, merkur, pairs, window_minutes=180, score_fn=None):
+def hints(pinnacle, book, pairs, window_minutes=180, score_fn=None):
     """{pinnacle id: {home, away, score, kickoffDiff}} of closest_unpaired(), for the "missing" view.
 
     `pairs` may map to the paired offer rows instead of the pair() inputs: only their ids are used."""
     ts = {p["id"]: p["ts"] for p in pinnacle}
     return {pid: {"home": m["home"], "away": m["away"], "score": score, "kickoffDiff": round((m["ts"] - ts[pid]) / 60000)}
-            for pid, (m, score) in closest_unpaired(pinnacle, merkur, pairs, window_minutes, score_fn).items()}
+            for pid, (m, score) in closest_unpaired(pinnacle, book, pairs, window_minutes, score_fn).items()}
 
 
 class OfferCache:

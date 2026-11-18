@@ -294,7 +294,7 @@ export default function App() {
   useEffect(() => writeStored("pb.topOnly", topOnly), [topOnly]);
 
   const competitions = useMemo(() => board?.competitions || [], [board]);
-  // "Nedostaju" also lists the rest of the PinnWire feed: leagues outside `competitions` that MerkurXtip does not offer
+  // "Nedostaju" also lists the rest of the PinnWire feed: leagues outside `competitions` that the bookie does not offer
   const otherCompetitions = board?.otherCompetitions;
   const allCompetitions = useMemo(() => [...competitions, ...(otherCompetitions || [])], [competitions, otherCompetitions]);
   const compById = useMemo(() => new Map(allCompetitions.map((c) => [c.id, c])), [allCompetitions]);
@@ -306,11 +306,11 @@ export default function App() {
     return pool.filter((m) => {
       if (competition !== "all" && (view !== "missing" && otherKeys.has(competition) ? false : compById.get(m.leagueId)?.key !== competition)) return false;
       if (!inDayFilter(new Date(m.starts), dayFilter)) return false;
-      if (view === "missing" && m.merkur) return false;
+      if (view === "missing" && m.book) return false;
       if (view === "compare" && edgeFilter !== "all") {
         if (edgeFilter === "missing") {
-          if (m.merkur) return false;
-        } else if (!m.merkur || (edgeFilter !== "paired" && (m.merkur.best?.ev ?? -1) < Number(edgeFilter))) {
+          if (m.book) return false;
+        } else if (!m.book || (edgeFilter !== "paired" && (m.book.best?.ev ?? -1) < Number(edgeFilter))) {
           return false;
         }
       }
@@ -376,7 +376,7 @@ export default function App() {
   const missingCounts = useMemo(() => {
     const counts = new Map();
     for (const m of [...(board?.matches || []), ...(board?.otherMissing || [])]) {
-      if (!m.merkur) counts.set(m.leagueId, (counts.get(m.leagueId) || 0) + 1);
+      if (!m.book) counts.set(m.leagueId, (counts.get(m.leagueId) || 0) + 1);
     }
     return counts;
   }, [board]);
@@ -447,14 +447,14 @@ export default function App() {
               <em>{cur.mode === "delta" ? `Δ ${cur.changed} promena` : "pun snapshot"}</em>
             </span>
           )}
-          {cur?.merkur && (
+          {cur?.book && (
             <span
-              className={cur.merkur.error ? "status-error" : ""}
-              title={cur.merkur.error || `${activeBookie.label} ponuda: upareni mečevi / mečevi ovih takmičenja u ponudi`}
+              className={cur.book.error ? "status-error" : ""}
+              title={cur.book.error || `${activeBookie.label} ponuda: upareni mečevi / mečevi ovih takmičenja u ponudi`}
             >
-              {activeBookie.short} {cur.merkur.fetchedAt ? clockFmt.format(new Date(cur.merkur.fetchedAt)) : "—"}
-              <em>upareno {cur.merkur.paired}/{cur.merkur.offered}</em>
-              {cur.merkur.error && <em>· greška</em>}
+              {activeBookie.short} {cur.book.fetchedAt ? clockFmt.format(new Date(cur.book.fetchedAt)) : "—"}
+              <em>upareno {cur.book.paired}/{cur.book.offered}</em>
+              {cur.book.error && <em>· greška</em>}
             </span>
           )}
         </div>
@@ -666,11 +666,11 @@ export default function App() {
                 </span>
               ) : (
                 <span className="legend mc-legend">
-                  <span className="mc-cell mx-fair">{activeBookie.short} ≥ fer</span>
-                  <span className="mc-cell mx-above">{activeBookie.short} &gt; Pinnacle</span>
+                  <span className="mc-cell book-fair">{activeBookie.short} ≥ fer</span>
+                  <span className="mc-cell book-above">{activeBookie.short} &gt; Pinnacle</span>
                   {view === "compare" && (
                     <>
-                      <span className="mc-cell mx-moved" title="Promena pri poslednjem osvežavanju">{activeBookie.short} promena</span>
+                      <span className="mc-cell book-moved" title="Promena pri poslednjem osvežavanju">{activeBookie.short} promena</span>
                       <span className="mc-cell pin-up" title="Promena pri poslednjem osvežavanju">PIN raste</span>
                       <span className="mc-cell pin-down" title="Promena pri poslednjem osvežavanju">PIN pada</span>
                     </>
@@ -699,7 +699,7 @@ export default function App() {
                   <CompareTable
                     matches={filtered}
                     pinStamp={board.fetchedAt}
-                    mxStamp={board.merkur?.fetchedAt}
+                    bookStamp={board.book?.fetchedAt}
                     selectedId={oddsId}
                     onOdds={setOddsId}
                     onSelect={setOddsId}
@@ -764,15 +764,15 @@ export default function App() {
             <button
               key={a.id}
               type="button"
-              className={`drop-alert${a.mxEv > 0 ? " edge" : ""}`}
+              className={`drop-alert${a.bookEv > 0 ? " edge" : ""}`}
               onClick={() => { drops.dismiss(a.id); openAlert(a); }}
               title="Klik za zatvaranje"
             >
               <b>▼ {a.match}</b>
               <span>
                 {a.market}{a.line} {a.side}: {fmtOdds(a.from)} → {fmtOdds(a.to)} (−{a.pct.toFixed(1)}%)
-                {a.mx != null
-                  ? ` · ${activeBookie.label} ${fmtOdds(a.mx)}, prednost ${fmtEv(a.mxEv)}`
+                {a.book != null
+                  ? ` · ${activeBookie.label} ${fmtOdds(a.book)}, prednost ${fmtEv(a.bookEv)}`
                   : a.nvp ? ` · fer ${fmtOdds(a.nvp)}` : ""}
               </span>
             </button>

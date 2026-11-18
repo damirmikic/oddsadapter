@@ -6,9 +6,9 @@ import { SPORTS, SportIcon } from "./menu.jsx";
 
 const MAX_SHOWN = 12;
 
-// Pinnacle and MerkurXtip names, so either spelling finds the match
+// Pinnacle and the bookie names, so either spelling finds the match
 export function matchesQuery(m, q) {
-  return !q || `${m.home} ${m.away} ${m.merkur?.home || ""} ${m.merkur?.away || ""}`.toLocaleLowerCase().includes(q);
+  return !q || `${m.home} ${m.away} ${m.book?.home || ""} ${m.book?.away || ""}`.toLocaleLowerCase().includes(q);
 }
 
 // boards: {sport: board}; hit counts per sport and every hit by kickoff
@@ -60,7 +60,7 @@ export function GlobalSearch({ query, setQuery, hits, onOpen }) {
           {!shown.length && <p className="search-empty">Nema mečeva ni u jednom sportu.</p>}
           {shown.map((hit) => {
             const m = hit.match;
-            const ev = m.merkur?.best?.ev;
+            const ev = m.book?.best?.ev;
             return (
               <button
                 type="button"
@@ -75,7 +75,7 @@ export function GlobalSearch({ query, setQuery, hits, onOpen }) {
                 {hit.competition && <CompBadge competition={hit.competition} />}
                 <span className="search-teams">{m.home} – {m.away}</span>
                 <span className="search-time">{fmtKickoffShort(new Date(m.starts))}</span>
-                {m.merkur
+                {m.book
                   ? <span className={`search-ev ${evClass(ev)}`}>{fmtEv(ev)}</span>
                   : <span className="search-ev muted">nije u {short}</span>}
               </button>

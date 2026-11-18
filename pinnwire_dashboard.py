@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Xtip Monitor server: Pinnacle (PinnWire) against MerkurXtip for football, basketball, tennis, hockey and MMA.
+"""Xtip Monitor server: Pinnacle (PinnWire) against the bookie for football, basketball, tennis, hockey and MMA.
 
 This module holds the football board, the shared History, the background workers (drop stream, CLV refresh),
 the HTTP handler and main(). Every sport keeps a PinnWire snapshot (full load, then `since=` deltas, see
-common.SnapshotState) and pairs it with the MerkurXtip offer; the other sports live in basketball.py, tennis.py,
+common.SnapshotState) and pairs it with the bookie offer; the other sports live in basketball.py, tennis.py,
 hockey.py and mma.py.
 """
 from __future__ import annotations
@@ -30,7 +30,7 @@ import clv
 import common
 import handball
 import hockey
-import bookie_client as mx
+import bookie_client as bk
 import mma
 import pinnwire_client as pw
 import price_history
@@ -61,16 +61,16 @@ PRICES_PATH = os.path.join(DATA, "prices.sqlite3")
 MARKS_PATH = os.path.join(DATA, "marks.sqlite3")
 
 LEAGUE_IDS = {c["id"] for c in COMPETITIONS}
-# `merkur_also`: further MerkurXtip leagues that PinnWire quotes under the same league_id
-MERKUR_COMP = {m: c["id"] for c in COMPETITIONS
-               for m in [*([c["merkur"]] if "merkur" in c else []), *c.get("merkur_also", [])]}
-# `merkur_of`: a competition sharing another one's MerkurXtip league pairs under that competition's id
-PAIR_COMP = {c["id"]: c.get("merkur_of", c["id"]) for c in COMPETITIONS}
+# `book_also`: further bookie leagues that PinnWire quotes under the same league_id
+BOOK_COMP = {m: c["id"] for c in COMPETITIONS
+               for m in [*([c["book"]] if "book" in c else []), *c.get("book_also", [])]}
+# `book_of`: a competition sharing another one's bookie league pairs under that competition's id
+PAIR_COMP = {c["id"]: c.get("book_of", c["id"]) for c in COMPETITIONS}
 
 
-def merkur_comp(row):
-    """PinnWire league_id of a MerkurXtip offer row's competition, None when it is not tracked."""
-    return MERKUR_COMP.get(row.get("leagueShort")) or MERKUR_COMP.get(row.get("leagueId"))
+def book_comp(row):
+    """PinnWire league_id of a bookie offer row's competition, None when it is not tracked."""
+    return BOOK_COMP.get(row.get("leagueShort")) or BOOK_COMP.get(row.get("leagueId"))
 # Explicit types: on Windows `mimetypes` reads the registry, where .js is sometimes text/plain,
 # which breaks module scripts and service worker registration.
 STATIC_TYPES = {
@@ -242,7 +242,7 @@ def summary(event, track, cleaned=False):
     }
 
 
-# ------------------------------------------------------------------------- MerkurXtip comparison
+# ------------------------------------------------------------------------- the bookie comparison
 
 COMPARE_GROUPS = [
     # (key in decoded markets, group label, outcome labels)
@@ -251,12 +251,12 @@ COMPARE_GROUPS = [
     ("spreads", "Hendikep", (("home", "1"), ("away", "2"))),
 ]
 OU_SIDES = (("over", "Više"), ("under", "Manje"))
-# compare row group -> PinnWire drop market, for the MerkurXtip price on a drop alert
+# compare row group -> PinnWire drop market, for the bookie price on a drop alert
 DROP_GROUPS = {"1X2": "moneyline", "Hendikep": "spread", "Ukupno golova": "total"}
 
 
 def pinnacle_lines(event, number, cleaned=False):
-    """Pinnacle prices of one period keyed like merkur_client.markets()."""
+    """Pinnacle prices of one period keyed like bookie_client.markets()."""
     if number == 0 and not cleaned:
         event = clean_ah0(event)
     markets = pw.period(event, number)
@@ -283,7 +283,7 @@ def pinnacle_max(event, number, cleaned=False):
     }
 
 
-def compare_period(event, merkur_period, number, cleaned=False):
+def compare_period(event, book_period, number, cleaned=False):
     if number == 0 and not cleaned:
         event = clean_ah0(event)
     pin = pinnacle_lines(event, number, cleaned=True)
@@ -291,35 +291,35 @@ def compare_period(event, merkur_period, number, cleaned=False):
     rows = []
     for key, group, labels in COMPARE_GROUPS:
         if key == "ml":
-            if merkur_period.get("ml") and pin["ml"]:
-                rows.append(common.compare_row(group, None, labels, merkur_period["ml"], pin["ml"]))
+            if book_period.get("ml") and pin["ml"]:
+                rows.append(common.compare_row(group, None, labels, book_period["ml"], pin["ml"]))
             continue
-        for line in sorted(merkur_period.get(key) or {}):
+        for line in sorted(book_period.get(key) or {}):
             if line in pin[key]:
-                derived = key == "spreads" and line in merkur_period.get("derived", ())
-                rows.append(common.compare_row(group, line, labels, merkur_period[key][line], pin[key][line],
+                derived = key == "spreads" and line in book_period.get("derived", ())
+                rows.append(common.compare_row(group, line, labels, book_period[key][line], pin[key][line],
                                                limits[key].get(line), derived))
     for side, group in (("home", "Golovi domaćin"), ("away", "Golovi gost")):
         pin_side = pin["teamTotals"].get(side) or {}
-        for line, prices in sorted(((merkur_period.get("teamTotals") or {}).get(side) or {}).items()):
+        for line, prices in sorted(((book_period.get("teamTotals") or {}).get(side) or {}).items()):
             if line in pin_side:
                 rows.append(common.compare_row(group, line, OU_SIDES, prices, pin_side[line],
                                                limits["teamTotals"].get(side, {}).get(line)))
     return rows
 
 
-def merkur_ts(row):
+def book_ts(row):
     return row.get("kickOffTime") or 0
 
 
-def merkur_info(row, event, score=None):
+def book_info(row, event, score=None):
     return {
         "id": row.get("id"),
         "code": row.get("matchCode"),
         "home": row.get("home", ""),
         "away": row.get("away", ""),
-        "kickoff": datetime.fromtimestamp(merkur_ts(row) / 1000, timezone.utc).isoformat().replace("+00:00", "Z"),
-        "kickoffDiff": round((merkur_ts(row) - event_ts(event)) / 60000),
+        "kickoff": datetime.fromtimestamp(book_ts(row) / 1000, timezone.utc).isoformat().replace("+00:00", "Z"),
+        "kickoffDiff": round((book_ts(row) - event_ts(event)) / 60000),
         "score": score,
     }
 
@@ -334,7 +334,7 @@ def period_rows(rows):
 
 
 def value_items(match, rows):
-    """Every outcome where the MerkurXtip price beats the Pinnacle price (with margin), one row each."""
+    """Every outcome where the bookie price beats the Pinnacle price (with margin), one row each."""
     def label(r, o):
         if r["group"] == "Hendikep":
             return match["home"] if o["key"] == "home" else match["away"]
@@ -343,16 +343,16 @@ def value_items(match, rows):
     return common.value_items(match["id"], period_rows(rows), PERIOD_LABELS, label=label)
 
 
-def merkur_summary(row, event, score, cleaned=False, decode=mx.markets):
+def book_summary(row, event, score, cleaned=False, decode=bk.markets):
     """Board cell data: 1X2 against fair odds, comparable goal lines and the largest edge anywhere."""
     decoded = decode(row)
     rows = {"ft": compare_period(event, decoded[0], 0, cleaned=cleaned),
             "ht": compare_period(event, decoded[1], 1, cleaned=True)}
     ml = next((r for r in rows["ft"] if r["group"] == "1X2"), None)
     return {
-        **merkur_info(row, event, score),
-        "ml": {o["key"]: {"odds": o["merkur"], "ev": o["ev"]} for o in ml["outcomes"]} if ml else None,
-        "margin": ml["merkurMargin"] if ml else None,
+        **book_info(row, event, score),
+        "ml": {o["key"]: {"odds": o["book"], "ev": o["ev"]} for o in ml["outcomes"]} if ml else None,
+        "margin": ml["bookMargin"] if ml else None,
         "totals": [r for r in rows["ft"] if r["group"] == "Ukupno golova"],
         "rows": rows,
         "best": common.best_edge(period_rows(rows), PREFIXES),
@@ -363,8 +363,8 @@ def merkur_summary(row, event, score, cleaned=False, decode=mx.markets):
 def goals_line(match, totals_rows):
     """Goal line for the board: the line both books price that is closest to Pinnacle's main line.
 
-    MerkurXtip only sells half-goal lines, Pinnacle's main line is often a quarter (2.25, 2.75);
-    ties go to the line whose Pinnacle prices are closest to even. Without MerkurXtip the
+    The bookie only sells half-goal lines, Pinnacle's main line is often a quarter (2.25, 2.75);
+    ties go to the line whose Pinnacle prices are closest to even. Without the bookie the
     Pinnacle main line is shown.
     """
     main = match.get("ou")
@@ -381,22 +381,22 @@ def goals_line(match, totals_rows):
             "line": row["line"],
             "fair": {k: o["fair"] for k, o in out.items()},
             "pinnacle": {k: o["pinnacle"] for k, o in out.items()},
-            "merkur": {k: o["merkur"] for k, o in out.items()},
+            "book": {k: o["book"] for k, o in out.items()},
             "ev": {k: o["ev"] for k, o in out.items()},
             "pinnacleMargin": row["pinnacleMargin"],
-            "merkurMargin": row["merkurMargin"],
+            "bookMargin": row["bookMargin"],
         }
     if main:
-        return {"line": main["line"], "fair": main["fair"], "pinnacle": main["odds"], "merkur": None, "ev": None,
-                "pinnacleMargin": main["margin"], "merkurMargin": None}
+        return {"line": main["line"], "fair": main["fair"], "pinnacle": main["odds"], "book": None, "ev": None,
+                "pinnacleMargin": main["margin"], "bookMargin": None}
     return None
 
 
-# Pinnacle and MerkurXtip sometimes differ by hours on kickoff (e.g. Colombian evening games); names and league still have to match
+# Pinnacle and the bookie sometimes differ by hours on kickoff (e.g. Colombian evening games); names and league still have to match
 PAIR_WINDOW = 6 * 60
 
 
-def pair_inputs(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
+def pair_inputs(events, offer, comp_fn=book_comp, is_prematch=bk.is_prematch, by_comp=True):
     pin = []
     for e in events:
         home, away = e.get("home", ""), e.get("away", "")
@@ -413,28 +413,28 @@ def pair_inputs(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch, 
             home, away = r.get("home", ""), r.get("away", "")
             if not by_comp:
                 home, away = common.with_league_markers(home, away, r.get("leagueName"))
-            mer.append({"id": r["id"], "comp": comp, "home": home, "away": away, "ts": merkur_ts(r), "row": r})
+            mer.append({"id": r["id"], "comp": comp, "home": home, "away": away, "ts": book_ts(r), "row": r})
     return pin, mer
 
 
-def pair_events(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
+def pair_events(events, offer, comp_fn=book_comp, is_prematch=bk.is_prematch, by_comp=True):
     pin, mer = pair_inputs(events, offer, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
     min_score = 0.5 if by_comp else common.OTHER_MIN_SCORE
     score_fn = None if by_comp else other_score
-    return {pid: (m["row"], score) for pid, (m, score) in mx.pair(pin, mer, PAIR_WINDOW, min_score, score_fn).items()}
+    return {pid: (m["row"], score) for pid, (m, score) in bk.pair(pin, mer, PAIR_WINDOW, min_score, score_fn).items()}
 
 
-def unpaired_hints(events, offer, pairs, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
-    """{pinnacle id: closest unused MerkurXtip offer row} for events without a pair, for the "missing" view."""
+def unpaired_hints(events, offer, pairs, comp_fn=book_comp, is_prematch=bk.is_prematch, by_comp=True):
+    """{pinnacle id: closest unused bookie offer row} for events without a pair, for the "missing" view."""
     pin, mer = pair_inputs(events, offer, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
     score_fn = None if by_comp else other_score
-    return mx.hints(pin, mer, pairs, PAIR_WINDOW, score_fn)
+    return bk.hints(pin, mer, pairs, PAIR_WINDOW, score_fn)
 
 
-def unpaired_other(events, offer, used, is_prematch=mx.is_prematch):
-    """({pinnacle id} unpaired, {pinnacle id: hint}, {pinnacle id: MerkurXtip row} paired) of events outside
-    COMPETITIONS; `used` are MerkurXtip ids already paired within COMPETITIONS."""
-    return common.unpaired_other(events, offer, used, merkur_ts, is_prematch=is_prematch)
+def unpaired_other(events, offer, used, is_prematch=bk.is_prematch):
+    """({pinnacle id} unpaired, {pinnacle id: hint}, {pinnacle id: the bookie row} paired) of events outside
+    COMPETITIONS; `used` are the bookie ids already paired within COMPETITIONS."""
+    return common.unpaired_other(events, offer, used, book_ts, is_prematch=is_prematch)
 
 
 # ------------------------------------------------------------------------- state
@@ -518,10 +518,10 @@ class DashboardState(common.SnapshotState):
 
     clv_name = "football"
 
-    def __init__(self, history=None, merkur=None, bookie=None):
-        super().__init__(history or History(), current_api_key, merkur, bookie=bookie)
-        self.mx_track = {}  # merkur match id -> {last, prev, changedAt}: 1X2 movement this session
-        self.goal_track = {}  # "pin|mx:<id>:<line>" -> {last, prev, changedAt}: board goal line movement
+    def __init__(self, history=None, book=None, bookie=None):
+        super().__init__(history or History(), current_api_key, book, bookie=bookie)
+        self.book_track = {}  # book match id -> {last, prev, changedAt}: 1X2 movement this session
+        self.goal_track = {}  # "pin|book:<id>:<line>" -> {last, prev, changedAt}: board goal line movement
         self.other_cache = None  # (offer, signature, unpaired ids, hints, offered) of leagues outside COMPETITIONS
 
     def comp_id(self, row):
@@ -538,7 +538,7 @@ class DashboardState(common.SnapshotState):
     def board(self, refresh=False, full=False):
         if refresh or full or self.events is None:
             self.refresh(full=full, if_empty=not (refresh or full))
-        offer = self.merkur_offer(refresh=refresh or full)
+        offer = self.book_offer(refresh=refresh or full)
         with self.lock:
             now = utc_now()
             upcoming = [e for e in (self.events or {}).values() if is_upcoming(e, now)]
@@ -553,24 +553,24 @@ class DashboardState(common.SnapshotState):
         values, quotes, clv_rows = [], {}, {}
         for m in matches:
             hit = pairs.get(str(m["id"]))
-            m["merkur"] = (merkur_summary(hit[0], by_id[str(m["id"])], hit[1], cleaned=True,
+            m["book"] = (book_summary(hit[0], by_id[str(m["id"])], hit[1], cleaned=True,
                                           decode=self.decode_markets)
                            if hit else None)
             m["hint"] = hints.get(str(m["id"]))
-            if m["merkur"]:
-                m["merkur"].update(self.track_merkur(m["merkur"]))
-            m["goals"] = goals_line(m, m["merkur"].pop("totals") if m["merkur"] else None)
-            if m["merkur"]:
-                rows = m["merkur"].pop("rows")
+            if m["book"]:
+                m["book"].update(self.track_book(m["book"]))
+            m["goals"] = goals_line(m, m["book"].pop("totals") if m["book"] else None)
+            if m["book"]:
+                rows = m["book"].pop("rows")
                 values.extend(value_items(m, rows))
                 quotes[str(m["id"])] = (m["id"], pw.quote_index({0: rows["ft"], 1: rows["ht"]}, DROP_GROUPS))
                 clv_rows[m["id"]] = [("ft", r) for r in rows["ft"]] + [("ht", r) for r in rows["ht"]]
             if m["goals"]:
                 m["goals"].update(self.track_goals(m))
-        self.mx_track = {k: v for k, v in self.mx_track.items()
+        self.book_track = {k: v for k, v in self.book_track.items()
                          if k in {row["id"] for row, _ in pairs.values()}}
         live_keys = {f"{src}:{i}:" for m in matches for src, i in
-                     (("pin", m["id"]), ("mx", (m["merkur"] or {}).get("id")))}
+                     (("pin", m["id"]), ("book", (m["book"] or {}).get("id")))}
         self.goal_track = {k: v for k, v in self.goal_track.items() if k[:k.rindex(":") + 1] in live_keys}
         matches = [m for m in matches if m["ml"] or m["ah"] or m["ou"]]
         kept = {m["id"] for m in matches}
@@ -598,16 +598,16 @@ class DashboardState(common.SnapshotState):
             "values": sorted(values, key=lambda v: v["ev"], reverse=True),
             "bookie": self.bookie.meta(),
             "bookies": bookie_adapter.adapter_catalog(),
-            "merkur": {
-                "fetchedAt": self.merkur.stamp,
-                "error": self.merkur.error,
-                "paired": sum(1 for m in matches if m["merkur"]),
+            "book": {
+                "fetchedAt": self.book.stamp,
+                "error": self.book.error,
+                "paired": sum(1 for m in matches if m["book"]),
                 "offered": sum(1 for r in offer if (not self.bookie.pair_by_comp or self.comp_id(r)) and self.is_prematch(r)),
             },
         }
 
     def missing_other(self, events, offer, used):
-        """Board entries of events outside COMPETITIONS that MerkurXtip does not offer (cached until the offer
+        """Board entries of events outside COMPETITIONS that the bookie does not offer (cached until the offer
         or the set of events changes: the pairing without a competition check is slow)."""
         # the offer list itself, not its id(): holding it keeps a newer list from reusing the id of an old one
         signature = (frozenset(str(e["event_id"]) for e in events), frozenset(used))
@@ -623,20 +623,20 @@ class DashboardState(common.SnapshotState):
                 continue
             m = summary(e, {})
             if m["ml"] or m["ah"] or m["ou"]:
-                out.append({**m, "merkur": None, "hint": hints.get(key)})
+                out.append({**m, "book": None, "hint": hints.get(key)})
         return sorted(out, key=lambda m: (m["starts"], m["home"]))
 
     def offered_other(self):
         return self.other_cache[4] if self.other_cache else []
 
-    def track_merkur(self, summary_row):
-        """Remember MerkurXtip 1X2 between offer fetches; returns {prev, changedAt} for the board."""
+    def track_book(self, summary_row):
+        """Remember the bookie 1X2 between offer fetches; returns {prev, changedAt} for the board."""
         if not summary_row.get("ml"):
             return {"prev": None, "changedAt": None}
         ml = {side: v["odds"] for side, v in summary_row["ml"].items()}
-        track = self.mx_track.setdefault(summary_row["id"], {"last": ml})
+        track = self.book_track.setdefault(summary_row["id"], {"last": ml})
         if track["last"] != ml:
-            track.update(prev=track["last"], last=ml, changedAt=self.merkur.stamp)
+            track.update(prev=track["last"], last=ml, changedAt=self.book.stamp)
         return {"prev": track.get("prev"), "changedAt": track.get("changedAt")}
 
     @staticmethod
@@ -652,28 +652,28 @@ class DashboardState(common.SnapshotState):
         line = goals["line"]
         pin_prev, pin_at = self._track(self.goal_track, f"pin:{match['id']}:{line}", goals["pinnacle"],
                                        self.fetched_at)
-        out = {"pinPrev": pin_prev, "pinChangedAt": pin_at, "mxPrev": None, "mxChangedAt": None}
-        if goals["merkur"]:
-            out["mxPrev"], out["mxChangedAt"] = self._track(
-                self.goal_track, f"mx:{match['merkur']['id']}:{line}", goals["merkur"], self.merkur.stamp)
+        out = {"pinPrev": pin_prev, "pinChangedAt": pin_at, "bookPrev": None, "bookChangedAt": None}
+        if goals["book"]:
+            out["bookPrev"], out["bookChangedAt"] = self._track(
+                self.goal_track, f"book:{match['book']['id']}:{line}", goals["book"], self.book.stamp)
         return out
 
-    def merkur_detail(self, event):
-        """Fresh single-match odds from MerkurXtip, compared per period; falls back to the offer list."""
+    def book_detail(self, event):
+        """Fresh single-match odds from the bookie, compared per period; falls back to the offer list."""
         hit = self.pairs.get(str(event["event_id"]))
         if hit is None:
             return None
         row, score = hit
         error = ""
-        fetched = self.merkur.stamp
+        fetched = self.book.stamp
         if getattr(self.bookie, "supports_match", True):
             try:
-                row, fetched = self.merkur.api.match(row["id"]), utc_stamp()
+                row, fetched = self.book.api.match(row["id"]), utc_stamp()
             except (RuntimeError, LookupError) as exc:
                 error = str(exc)
         decoded = self.decode_markets(row)
         return {
-            **merkur_info(row, event, score),
+            **book_info(row, event, score),
             "fetchedAt": fetched,
             "error": error,
             "periods": {"ft": compare_period(event, decoded[0], 0), "ht": compare_period(event, decoded[1], 1)},
@@ -709,7 +709,7 @@ class DashboardState(common.SnapshotState):
             ],
             "fetchedAt": fetched,
             "callsToday": self.history.calls_today(),
-            "merkur": self.merkur_detail(event),
+            "book": self.book_detail(event),
         }
 
 
@@ -942,7 +942,7 @@ def clv_response(query):
 
 def drops_response(query):
     """Recent prematch drops of one sport from the SSE buffer, each with the board match it belongs to and,
-    for paired matches, the MerkurXtip price of the same outcome (`merkur / nvp - 1` is its edge)."""
+    for paired matches, the bookie price of the same outcome (`book / nvp - 1` is its edge)."""
     sport = (query.get("sport") or ["football"])[0]
     if sport not in DROP_SPORTS:
         raise LookupError("Nepoznat sport.")
@@ -961,11 +961,11 @@ def drops_response(query):
             continue
         match_id, index = quotes.get(str(d["event_id"]), (None, {}))
         quote = index.get(pw.drop_key(d["market"], d["period"], d["side"], d["points"]))
-        merkur = None
+        book = None
         if quote:
             fair = d["nvp"] or quote["fair"]
-            merkur = {"odds": quote["merkur"], "ev": round(quote["merkur"] / fair - 1, 4)}
-        out.append({**d, "match_id": match_id, "age_s": max(0, round(now - d["alerted"])), "merkur": merkur})
+            book = {"odds": quote["book"], "ev": round(quote["book"] / fair - 1, 4)}
+        out.append({**d, "match_id": match_id, "age_s": max(0, round(now - d["alerted"])), "book": book})
     return {"drops": out, "stream": DROPS.status(), "callsToday": STATE.history.calls_today()}
 
 

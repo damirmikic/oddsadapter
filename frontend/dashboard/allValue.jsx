@@ -187,8 +187,8 @@ export function AllValuePane({ boards, errors, dayFilter, setDayFilter, query, s
           </div>
           {searchBox}
           <span className="legend mc-legend">
-            <span className="mc-cell mx-fair">{short} ≥ fer</span>
-            <span className="mc-cell mx-above">{short} &gt; Pinnacle</span>
+            <span className="mc-cell book-fair">{short} ≥ fer</span>
+            <span className="mc-cell book-above">{short} &gt; Pinnacle</span>
           </span>
         </div>
         <main className="workspace">
