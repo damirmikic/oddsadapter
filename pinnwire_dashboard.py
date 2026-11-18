@@ -397,16 +397,23 @@ PAIR_WINDOW = 6 * 60
 
 
 def pair_inputs(events, offer, comp_fn=merkur_comp, is_prematch=mx.is_prematch, by_comp=True):
-    pin = [{"id": str(e["event_id"]), "comp": PAIR_COMP[e["league_id"]] if by_comp else "*",
-            "home": e.get("home", ""), "away": e.get("away", ""), "ts": event_ts(e)} for e in events]
+    pin = []
+    for e in events:
+        home, away = e.get("home", ""), e.get("away", "")
+        if not by_comp:
+            home, away = common.with_league_markers(home, away, e.get("league_name"))
+        pin.append({"id": str(e["event_id"]), "comp": PAIR_COMP[e["league_id"]] if by_comp else "*",
+                    "home": home, "away": away, "ts": event_ts(e)})
     mer = []
     for r in offer:
         if not is_prematch(r):
             continue
         comp = comp_fn(r) if by_comp else "*"
         if comp:
-            mer.append({"id": r["id"], "comp": comp, "home": r.get("home", ""),
-                        "away": r.get("away", ""), "ts": merkur_ts(r), "row": r})
+            home, away = r.get("home", ""), r.get("away", "")
+            if not by_comp:
+                home, away = common.with_league_markers(home, away, r.get("leagueName"))
+            mer.append({"id": r["id"], "comp": comp, "home": home, "away": away, "ts": merkur_ts(r), "row": r})
     return pin, mer
 
 
@@ -658,10 +665,12 @@ class DashboardState(common.SnapshotState):
             return None
         row, score = hit
         error = ""
-        try:
-            row, fetched = self.merkur.api.match(row["id"]), utc_stamp()
-        except (RuntimeError, LookupError) as exc:
-            error, fetched = str(exc), self.merkur.stamp
+        fetched = self.merkur.stamp
+        if getattr(self.bookie, "supports_match", True):
+            try:
+                row, fetched = self.merkur.api.match(row["id"]), utc_stamp()
+            except (RuntimeError, LookupError) as exc:
+                error = str(exc)
         decoded = self.decode_markets(row)
         return {
             **merkur_info(row, event, score),

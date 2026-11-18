@@ -180,6 +180,7 @@ OTHER_WINDOW = 3 * 60
 OTHER_MIN_SCORE = 0.75
 # a women's, youth or reserve side never pairs with the senior side of the same club
 SIDE_MARKERS = {"w", "women", "u17", "u18", "u19", "u20", "u21", "u23", "ii", "b", "res", "reserves"}
+LEAGUE_MARKERS = {"w", "women", "u17", "u18", "u19", "u20", "u21", "u23"}
 
 
 _ALNUM = re.compile(r"[a-z0-9]+")
@@ -188,7 +189,22 @@ _ALNUM = re.compile(r"[a-z0-9]+")
 @functools.lru_cache(maxsize=16384)
 def side_markers(name):
     text = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
-    return frozenset(SIDE_MARKERS.intersection(_ALNUM.findall(text)))
+    tokens = set(_ALNUM.findall(text))
+    if "women" in tokens or "zene" in tokens:
+        tokens.add("w")
+    return frozenset(SIDE_MARKERS.intersection(tokens))
+
+
+def with_league_markers(home, away, league):
+    """Attach youth/women markers from `league` to both team names so U20/Women leagues never pair with senior ones."""
+    marks = LEAGUE_MARKERS.intersection(side_markers(league))
+    if not marks:
+        return home, away
+    suffix = " ".join(sorted(marks))
+    return (
+        home if marks.issubset(side_markers(home)) else f"{home} {suffix}",
+        away if marks.issubset(side_markers(away)) else f"{away} {suffix}",
+    )
 
 
 def other_score(pinnacle, merkur):

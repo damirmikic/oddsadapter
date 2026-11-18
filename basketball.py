@@ -392,8 +392,13 @@ def swapped_entries(base, row):
 
 def pair_inputs(events, offer, mx_comp=MX_COMP, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
     comp_fn = comp_fn or (lambda r: mx_comp.get(r.get("leagueId")))
-    pin = [{"id": str(e["event_id"]), "comp": e["league_id"] if by_comp else "*", "home": e.get("home", ""),
-            "away": e.get("away", ""), "ts": event_ts(e)} for e in events]
+    pin = []
+    for e in events:
+        home, away = e.get("home", ""), e.get("away", "")
+        if not by_comp:
+            home, away = common.with_league_markers(home, away, e.get("league_name"))
+        pin.append({"id": str(e["event_id"]), "comp": e["league_id"] if by_comp else "*",
+                    "home": home, "away": away, "ts": event_ts(e)})
     mer = []
     for r in offer:
         if not is_prematch(r):
@@ -401,7 +406,12 @@ def pair_inputs(events, offer, mx_comp=MX_COMP, comp_fn=None, is_prematch=mx.is_
         comp = comp_fn(r) if by_comp else "*"
         if comp is None:
             continue
-        mer.extend(swapped_entries({"id": r["id"], "comp": comp, "ts": r.get("kickOffTime") or 0}, r))
+        row = r
+        if not by_comp:
+            home, away = common.with_league_markers(r.get("home", ""), r.get("away", ""), r.get("leagueName"))
+            if (home, away) != (r.get("home", ""), r.get("away", "")):
+                row = {**r, "home": home, "away": away}
+        mer.extend(swapped_entries({"id": r["id"], "comp": comp, "ts": r.get("kickOffTime") or 0}, row))
     return pin, mer
 
 
@@ -566,10 +576,11 @@ class BasketballState(common.SnapshotState):
         error, fetched = "", self.merkur.stamp
         if hit is not None:
             row, score = hit
-            try:
-                row, fetched = {**hit[0], **self.merkur.api.match(row["id"])}, common.utc_stamp()
-            except (RuntimeError, LookupError) as exc:
-                error = str(exc)
+            if getattr(self.bookie, "supports_match", True):
+                try:
+                    row, fetched = {**hit[0], **self.merkur.api.match(row["id"])}, common.utc_stamp()
+                except (RuntimeError, LookupError) as exc:
+                    error = str(exc)
             hit = (row, score)
         match, _ = self.shape(event, hit)
         return {"match": match, "fetchedAt": fetched, "error": error, "callsToday": self.history.calls_today()}

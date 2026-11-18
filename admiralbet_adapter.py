@@ -113,6 +113,7 @@ class AdmiralBetAdapter(bookie_adapter.BookieAdapter):
     aliases = ("admiral", "ab")
     label = "AdmiralBet"
     short = "AB"
+    supports_match = False
 
     def __init__(self, timeout=25):
         self.timeout = timeout
