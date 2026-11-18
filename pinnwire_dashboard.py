@@ -1011,7 +1011,7 @@ def coverage_response(query):
 
     def check_one(entry):
         adapter = STATE.bookie if entry["name"] == STATE.bookie.name else bookie_adapter.get_adapter(entry["name"])
-        cache = state.book_cache if entry["name"] == STATE.bookie.name else _coverage_cache(adapter, sport)
+        cache = state.book if entry["name"] == STATE.bookie.name else _coverage_cache(adapter, sport)
         offer = cache.get(refresh=refresh, stamp_fn=utc_stamp)
         pairs = state.pair_for(events, offer, adapter) if not cache.error or offer else {}
         offered = sum(1 for r in offer if (not adapter.pair_by_comp or adapter.comp_id(sport, r) is not None)
