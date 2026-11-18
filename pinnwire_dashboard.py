@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
+import admiralbet_adapter  # noqa: F401 (registers AdmiralBetAdapter)
 import applog
 import basketball as bb
 import bookie_adapter
