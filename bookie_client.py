@@ -293,15 +293,21 @@ def norm_tokens(name):
     return [t for t in tokens if t not in _STOP] or tokens
 
 
-def _token_match(a, b):
-    if a == b or a.startswith(b) or b.startswith(a):
-        return True
+def _token_score(a, b):
+    if a == b:
+        return 1.0
+    if a.startswith(b) or b.startswith(a):
+        return 0.9
     la, lb = len(a), len(b)
     if min(la, lb) >= 4 and (a in b or b in a):
-        return True
+        return 0.7
     if min(la, lb) < 5 or 5 * abs(la - lb) > la + lb or 5 * len(set(a) ^ set(b)) > la + lb:
-        return False
-    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+        return 0.0
+    return 0.7 if difflib.SequenceMatcher(None, a, b).ratio() >= 0.8 else 0.0
+
+
+def _token_match(a, b):
+    return _token_score(a, b) > 0.0
 
 
 def name_score(a, b):
@@ -312,7 +318,7 @@ def name_score(a, b):
     short, long_ = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
     if len(short) == 1 and len(long_) > 1 and short[0] == "".join(t[0] for t in long_):
         return 1.0  # PSG <-> Paris Saint Germain
-    return sum(1 for t in short if any(_token_match(t, u) for u in long_)) / len(short)
+    return sum(max((_token_score(t, u) for u in long_), default=0.0) for t in short) / len(short)
 
 
 # Kickoff gap (minutes) beyond which both team names must match at least partly
