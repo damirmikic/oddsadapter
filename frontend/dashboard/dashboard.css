@@ -684,24 +684,24 @@ footer { padding: 14px 20px; border-top: 1px solid var(--line); color: var(--fai
   .board-scroll, .modal-backdrop, .modal { -webkit-overflow-scrolling: touch; }
   .modal { padding: 12px; overflow-x: auto; }
   .modal-backdrop { padding: 8px; }
-  .mx-table { font-size: 12px; }
-  .mx-table .mx-side { max-width: 80px; }
+  .book-table { font-size: 12px; }
+  .book-table .book-side { max-width: 80px; }
   .detail { padding-bottom: env(safe-area-inset-bottom); }
 }
 
-/* ---------------------------------------------------------------- MerkurXtip comparison */
-:root { --mx: #e30613; --edge-pos: #f2555a; --edge-pos-bg: rgba(242, 85, 90, .16); --edge-near: #e6b450; --edge-near-bg: rgba(230, 180, 80, .12); }
+/* ---------------------------------------------------------------- the bookie comparison */
+:root { --book: #e30613; --edge-pos: #f2555a; --edge-pos-bg: rgba(242, 85, 90, .16); --edge-near: #e6b450; --edge-near-bg: rgba(230, 180, 80, .12); }
 @media (prefers-color-scheme: light) {
   :root { --edge-pos: #c62828; --edge-pos-bg: rgba(198, 40, 40, .10); --edge-near: #9a6b00; --edge-near-bg: rgba(230, 170, 30, .14); }
 }
 .view-switch button.active { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
 .status-error { color: var(--down); }
 
-.mx-price { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; min-width: 52px; padding: 2px 4px; border-radius: 5px; }
-.mx-ev { font-size: 10.5px; font-weight: 600; color: var(--faint); }
-.mx-price.edge-pos { background: var(--edge-pos-bg); }
-.mx-price.edge-pos .mx-ev, .mx-price.edge-pos .price-odds { color: var(--edge-pos); }
-.mx-price.edge-near .mx-ev { color: var(--edge-near); }
+.book-price { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; min-width: 52px; padding: 2px 4px; border-radius: 5px; }
+.book-ev { font-size: 10.5px; font-weight: 600; color: var(--faint); }
+.book-price.edge-pos { background: var(--edge-pos-bg); }
+.book-price.edge-pos .book-ev, .book-price.edge-pos .price-odds { color: var(--edge-pos); }
+.book-price.edge-near .book-ev { color: var(--edge-near); }
 
 .board .col-sep { border-left: 1px solid var(--line-soft); }
 .board .col-best { width: 190px; text-align: left; }
@@ -723,18 +723,18 @@ footer { padding: 14px 20px; border-top: 1px solid var(--line); color: var(--fai
 .ev-chip.edge-neg { background: var(--panel); }
 .legend .ev-chip { min-width: 0; font-size: 10px; margin-left: 6px; }
 
-.mx-card { border-color: color-mix(in srgb, var(--mx) 40%, var(--line-soft)); }
-.mx-card h3 small { display: block; margin: 3px 0 0; }
-.mx-names { margin: -4px 0 8px; color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.mx-names .kickoff-warn { margin-top: 0; }
-.mx-table tbody { border-top: 1px solid var(--line); }
-.bb-detail .mx-table tbody { border-top: 2px solid var(--muted); }
-.mx-table .mx-market { text-align: left; font-size: 11px; line-height: 1.3; }
-.mx-table .mx-market span { display: block; color: var(--text); font-size: 12px; }
-.mx-table .mx-side { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-.mx-table .mx-market small { display: block; margin-top: 2px; color: var(--faint); font-size: 10px; font-weight: 500; }
+.book-card { border-color: color-mix(in srgb, var(--book) 40%, var(--line-soft)); }
+.book-card h3 small { display: block; margin: 3px 0 0; }
+.book-names { margin: -4px 0 8px; color: var(--muted); font-size: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.book-names .kickoff-warn { margin-top: 0; }
+.book-table tbody { border-top: 1px solid var(--line); }
+.bb-detail .book-table tbody { border-top: 2px solid var(--muted); }
+.book-table .book-market { text-align: left; font-size: 11px; line-height: 1.3; }
+.book-table .book-market span { display: block; color: var(--text); font-size: 12px; }
+.book-table .book-side { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.book-table .book-market small { display: block; margin-top: 2px; color: var(--faint); font-size: 10px; font-weight: 500; }
 
-/* ---------------------------------------------------------------- comparison board (MX vs Pinnacle) */
+/* ---------------------------------------------------------------- comparison board (bookie vs Pinnacle) */
 :root {
   --mc-head: #1f2b2f; --mc-head-2: #26343a; --mc-head-ink: #e9f0f2; --mc-group-line: #3a4a52;
   --mc-max-bg: rgba(76, 141, 255, .10); --mc-max-ink: #6ea8ff;
@@ -775,7 +775,7 @@ footer { padding: 14px 20px; border-top: 1px solid var(--line); color: var(--fai
 .mc-when { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; }
 .mc-when .kickoff-warn { margin-top: 0; }
 .mc-limit { color: var(--maxbet); font-size: 11.5px; font-weight: 700; }
-.mx-maxbet { color: var(--maxbet); font-weight: 700; text-align: center; vertical-align: middle; }
+.book-maxbet { color: var(--maxbet); font-weight: 700; text-align: center; vertical-align: middle; }
 :root { --maxbet: #4cc27f; }
 @media (prefers-color-scheme: light) { :root { --maxbet: #17803f; } }
 .mc-teams { margin: 2px 0 1px; font-size: 13.5px; line-height: 1.3; }
@@ -790,10 +790,10 @@ footer { padding: 14px 20px; border-top: 1px solid var(--line); color: var(--fai
   padding: 0 4px; border: 1px solid transparent; border-radius: 4px;
 }
 .mc-odds .mc-cell { width: 100%; }
-.mc-cell.mx-above { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); }
-.mc-cell.mx-fair { background: var(--red-bg); border-color: var(--red-line); color: var(--red-ink); }
-.mc-cell.mx-moved { box-shadow: inset 0 0 0 2px var(--purple-line); }
-.mc-cell.mx-moved:not(.mx-above):not(.mx-fair) { background: var(--purple-bg); color: var(--purple-ink); }
+.mc-cell.book-above { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); }
+.mc-cell.book-fair { background: var(--red-bg); border-color: var(--red-line); color: var(--red-ink); }
+.mc-cell.book-moved { box-shadow: inset 0 0 0 2px var(--purple-line); }
+.mc-cell.book-moved:not(.book-above):not(.book-fair) { background: var(--purple-bg); color: var(--purple-ink); }
 .mc-cell.pin-up { background: var(--green-bg); border-color: var(--green-line); color: var(--green-ink); }
 .mc-cell.pin-down { background: var(--blue-bg); border-color: var(--blue-line); color: var(--blue-ink); }
 .mc-legend .mc-cell { min-height: 0; min-width: 0; padding: 1px 6px; margin-left: 4px; font-size: 10.5px; font-weight: 700; }
@@ -828,7 +828,7 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 .value-summary button em.edge-pos { color: var(--edge-pos); }
 .value-summary button em.edge-near { color: var(--edge-near); }
 
-/* Pinnacle price fell: blue, so red stays reserved for "MX >= fair" */
+/* Pinnacle price fell: blue, so red stays reserved for "bookie >= fair" */
 :root { --blue-bg: rgba(76, 141, 255, .16); --blue-line: rgba(76, 141, 255, .55); --blue-ink: #7aa7ff; }
 @media (prefers-color-scheme: light) {
   :root { --blue-bg: #e6effc; --blue-line: #a9c3ee; --blue-ink: #1d4ed8; }
@@ -863,14 +863,14 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 .modal-head h2 span { color: var(--muted); }
 .modal-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .modal .segmented { justify-self: start; }
-.mx-table tbody.mx-group-start { border-top: 3px solid var(--muted); }
+.book-table tbody.book-group-start { border-top: 3px solid var(--muted); }
 
 /* ---------------------------------------------------------------- basketball */
 .bb-day { margin-bottom: 14px; }
 .bb-day-title { display: flex; align-items: center; gap: 8px; margin: 4px 2px 8px; font-size: 13px; font-weight: 700; }
 .bb-day-title span { padding: 1px 7px; border-radius: 10px; background: var(--panel-2); color: var(--faint); font-size: 11px; }
 .bb-detail-row > td { padding: 10px 14px 14px; border-bottom: 1px solid var(--line); background: var(--panel-2); text-align: left; }
-.bb-detail .mx-names { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.bb-detail .book-names { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
 .comp-badge.nba { --badge: #1d428a; }
 .comp-badge.euroleague, .comp-badge.elw { --badge: #e86a10; }
 .comp-badge.eurocup, .comp-badge.ecw { --badge: #1f6fb4; }
@@ -909,7 +909,7 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 }
 .missing-hint { text-align: left; white-space: nowrap; }
 .missing-hint small { margin-left: 4px; color: var(--faint); }
-.mx-table .mx-fair-cell { background: var(--panel-2); color: var(--text); font-weight: 800; }
+.book-table .book-fair-cell { background: var(--panel-2); color: var(--text); font-weight: 800; }
 
 .drop-alerts {
   position: fixed; right: 16px; bottom: 16px; z-index: 50;
@@ -961,10 +961,10 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 @media (prefers-reduced-motion: reduce) { .drop-alert { animation-duration: 1.4s; animation-iteration-count: 3; } }
 
 /* ---------------------------------------------------------------- price history (line-movement charts) */
-/* PIN blue / MX orange: checked for colour-blind separation and contrast on both themes' panels */
-:root { --pin-line: #4c8dff; --mx-line: #e8691f; }
-:root[data-theme="light"] { --pin-line: #2f6fe0; --mx-line: #d85f17; }
-@media (prefers-color-scheme: light) { :root:not([data-theme]) { --pin-line: #2f6fe0; --mx-line: #d85f17; } }
+/* PIN blue / bookie orange: checked for colour-blind separation and contrast on both themes' panels */
+:root { --pin-line: #4c8dff; --book-line: #e8691f; }
+:root[data-theme="light"] { --pin-line: #2f6fe0; --book-line: #d85f17; }
+@media (prefers-color-scheme: light) { :root:not([data-theme]) { --pin-line: #2f6fe0; --book-line: #d85f17; } }
 
 .spark { display: inline-flex; padding: 2px; border: 1px solid transparent; border-radius: 4px; background: none; cursor: pointer; vertical-align: middle; }
 .spark:hover, .spark.active { border-color: var(--line); background: var(--panel-2); }
@@ -972,7 +972,7 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 .spark path { fill: none; stroke-width: 1.5; stroke-linejoin: round; }
 .spark-none { color: var(--faint); }
 .spark-pin, .line-pin { stroke: var(--pin-line); }
-.spark-mx, .line-mx { stroke: var(--mx-line); }
+.spark-book, .line-book { stroke: var(--book-line); }
 
 .hist-row > td { padding: 4px 6px 10px !important; background: var(--panel-2); }
 .price-chart { position: relative; margin: 0; }
@@ -981,7 +981,7 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 .price-chart .legend { display: inline-flex; gap: 10px; align-items: center; }
 .price-chart .legend i { display: inline-block; width: 14px; height: 0; margin-right: 4px; border-top: 2px solid; vertical-align: middle; }
 .price-chart .legend .lg-pin { border-color: var(--pin-line); }
-.price-chart .legend .lg-mx { border-color: var(--mx-line); }
+.price-chart .legend .lg-book { border-color: var(--book-line); }
 .price-chart .legend .lg-fair { border-top: 2px dashed var(--faint); }
 .price-chart svg { display: block; width: 100%; height: auto; touch-action: none; }
 .price-chart path { fill: none; stroke-width: 2; stroke-linejoin: round; }
@@ -992,7 +992,7 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 .price-chart .crosshair { stroke: var(--faint); stroke-width: 1; }
 .price-chart circle { stroke: var(--panel-2); stroke-width: 2; }
 .price-chart .dot-pin { fill: var(--pin-line); }
-.price-chart .dot-mx { fill: var(--mx-line); }
+.price-chart .dot-book { fill: var(--book-line); }
 .chart-tip { position: absolute; top: 22px; transform: translateX(-50%); padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font-size: 11px; white-space: nowrap; pointer-events: none; box-shadow: 0 4px 14px rgba(0, 0, 0, .25); }
 .chart-tip span { color: var(--muted); }
 .chart-tip i { display: inline-block; width: 8px; height: 8px; margin: 0 3px 0 8px; border-radius: 50%; }

@@ -1,6 +1,6 @@
-"""Basketball board: Pinnacle (PinnWire sport 3) against the MerkurXtip basketball offer.
+"""Basketball board: Pinnacle (PinnWire sport 3) against the bookie basketball offer.
 
-Full-game markets (overtime included, MerkurXtip calls them "EKS INING"), the 1st half and the 1st quarter are
+Full-game markets (overtime included, the bookie calls them "EKS INING"), the 1st half and the 1st quarter are
 compared: winner, handicap, total points and team totals. Lines are matched exactly and only half-point lines
 (x.5) are used: whole-number lines refund on a push, which a two-way fair price does not account for.
 """
@@ -11,97 +11,97 @@ from statistics import NormalDist
 
 import common
 import bookie_adapter
-import bookie_client as mx
+import bookie_client as bk
 import pinnwire_client as pw
 from common import event_ts, merge_event  # noqa: F401 (tennis and hockey use them through this module)
 
 SPORT_ID = 3
 OFFER_PATH = "/restapi/custom/offer/sr/sport/B/mob"
 
-# PinnWire league_id -> display info; `mx_id` is the MerkurXtip leagueId of the same competition.
+# PinnWire league_id -> display info; `book_id` is the bookie leagueId of the same competition.
 COMPETITIONS = [
-    {"id": 487, "key": "nba", "name": "NBA", "country": "SAD", "code": "NBA", "mx_id": 2314399},
-    {"id": 382, "key": "euroleague", "name": "Evroliga", "country": "Evropa", "code": "EL", "mx_id": 2313816},
-    {"id": 377, "key": "eurocup", "name": "Evrokup", "country": "Evropa", "code": "EC", "mx_id": 2313955},
+    {"id": 487, "key": "nba", "name": "NBA", "country": "SAD", "code": "NBA", "book_id": 2314399},
+    {"id": 382, "key": "euroleague", "name": "Evroliga", "country": "Evropa", "code": "EL", "book_id": 2313816},
+    {"id": 377, "key": "eurocup", "name": "Evrokup", "country": "Evropa", "code": "EC", "book_id": 2313955},
     {"id": 197844, "key": "bcl", "name": "Liga šampiona (FIBA)", "country": "Evropa", "code": "BCL",
-     "mx_id": 2403750},
-    {"id": 367, "key": "fibaec", "name": "FIBA Europe Cup", "country": "Evropa", "code": "FIBA EC", "mx_id": 2403767,
-     "mx_extra": (2325961, 2404806)},  # some rounds are listed under the generic "International" league
-    {"id": 223698, "key": "enbl", "name": "ENBL", "country": "Evropa", "code": "ENBL", "mx_id": 2360673},
-    {"id": 374, "key": "vtb", "name": "VTB liga", "country": "Evropa", "code": "VTB", "mx_id": 2314880},
-    {"id": 210890, "key": "aba2", "name": "ABA liga 2", "country": "Evropa", "code": "ABA2", "mx_id": 2315349},
-    {"id": 383, "key": "elw", "name": "Evroliga (Ž)", "country": "Evropa", "code": "ELW", "mx_id": 2313973},
-    {"id": 379, "key": "ecw", "name": "Evrokup (Ž)", "country": "Evropa", "code": "ECW", "mx_id": 2315446},
+     "book_id": 2403750},
+    {"id": 367, "key": "fibaec", "name": "FIBA Europe Cup", "country": "Evropa", "code": "FIBA EC", "book_id": 2403767,
+     "book_extra": (2325961, 2404806)},  # some rounds are listed under the generic "International" league
+    {"id": 223698, "key": "enbl", "name": "ENBL", "country": "Evropa", "code": "ENBL", "book_id": 2360673},
+    {"id": 374, "key": "vtb", "name": "VTB liga", "country": "Evropa", "code": "VTB", "book_id": 2314880},
+    {"id": 210890, "key": "aba2", "name": "ABA liga 2", "country": "Evropa", "code": "ABA2", "book_id": 2315349},
+    {"id": 383, "key": "elw", "name": "Evroliga (Ž)", "country": "Evropa", "code": "ELW", "book_id": 2313973},
+    {"id": 379, "key": "ecw", "name": "Evrokup (Ž)", "country": "Evropa", "code": "ECW", "book_id": 2315446},
     {"id": 202722, "key": "elbl", "name": "Estonsko-letonska liga", "country": "Evropa", "code": "ELBL",
-     "mx_id": 2403632},
-    {"id": 474, "key": "itaa2", "name": "Serie A2", "country": "Italija", "code": "ITA2", "mx_id": 2315606},
-    {"id": 237687, "key": "copaesp", "name": "Copa del Rey", "country": "Španija", "code": "ESP", "mx_id": 2389797},
-    {"id": 439, "key": "grelite", "name": "Elite liga", "country": "Grčka", "code": "GRE", "mx_id": 2337796},
-    {"id": 408, "key": "korisliiga", "name": "Korisliiga", "country": "Finska", "code": "FIN", "mx_id": 2313964},
-    {"id": 485, "key": "lkl", "name": "LKL", "country": "Litvanija", "code": "LKL", "mx_id": 2313841},
-    {"id": 208618, "key": "nkl", "name": "NKL", "country": "Litvanija", "code": "NKL", "mx_id": 2325726},
-    {"id": 293, "key": "nbb", "name": "NBB", "country": "Brazil", "code": "BRA", "mx_id": 2314041},
-    {"id": 486, "key": "lnbp", "name": "LNBP", "country": "Meksiko", "code": "MEX", "mx_id": 2326413},
-    {"id": 501, "key": "blno", "name": "BLNO", "country": "Norveška", "code": "NOR", "mx_id": 2314043},
-    {"id": 204110, "key": "iceland", "name": "Úrvalsdeild", "country": "Island", "code": "ISL", "mx_id": 2315462},
-    {"id": 282, "key": "wnbl", "name": "WNBL", "country": "Australija", "code": "WNBL", "mx_id": 2328102},
-    {"id": 274, "key": "lnbarg", "name": "Liga Nacional", "country": "Argentina", "code": "ARG", "mx_id": 2315603},
-    {"id": 238365, "key": "rus", "name": "Superliga", "country": "Rusija", "code": "RUS", "mx_id": 2339821},
-    {"id": 493, "key": "ncaa", "name": "NCAA", "country": "SAD", "code": "NCAA", "mx_id": 2313823},
-    {"id": 268, "key": "aba", "name": "ABA liga", "country": "Evropa", "code": "ABA", "mx_id": 2314107},
-    {"id": 472, "key": "itaa", "name": "Lega A", "country": "Italija", "code": "ITA", "mx_id": 2314021},
-    {"id": 197913, "key": "tursl", "name": "Super liga", "country": "Turska", "code": "TUR", "mx_id": 2313839},
-    {"id": 462, "key": "isrpl", "name": "Premier liga", "country": "Izrael", "code": "ISR", "mx_id": 2314182},
-    {"id": 415, "key": "fraprob", "name": "Pro B", "country": "Francuska", "code": "FRA2", "mx_id": 2387819},
-    {"id": 417, "key": "fracup", "name": "Kup Francuske", "country": "Francuska", "code": "FRAC", "mx_id": 2326061},
-    {"id": 565, "key": "swebl", "name": "Basketligan", "country": "Švedska", "code": "SWE", "mx_id": 2313843},
-    {"id": 297, "key": "bulnbl", "name": "NBL", "country": "Bugarska", "code": "BUL", "mx_id": 2314214},
+     "book_id": 2403632},
+    {"id": 474, "key": "itaa2", "name": "Serie A2", "country": "Italija", "code": "ITA2", "book_id": 2315606},
+    {"id": 237687, "key": "copaesp", "name": "Copa del Rey", "country": "Španija", "code": "ESP", "book_id": 2389797},
+    {"id": 439, "key": "grelite", "name": "Elite liga", "country": "Grčka", "code": "GRE", "book_id": 2337796},
+    {"id": 408, "key": "korisliiga", "name": "Korisliiga", "country": "Finska", "code": "FIN", "book_id": 2313964},
+    {"id": 485, "key": "lkl", "name": "LKL", "country": "Litvanija", "code": "LKL", "book_id": 2313841},
+    {"id": 208618, "key": "nkl", "name": "NKL", "country": "Litvanija", "code": "NKL", "book_id": 2325726},
+    {"id": 293, "key": "nbb", "name": "NBB", "country": "Brazil", "code": "BRA", "book_id": 2314041},
+    {"id": 486, "key": "lnbp", "name": "LNBP", "country": "Meksiko", "code": "MEX", "book_id": 2326413},
+    {"id": 501, "key": "blno", "name": "BLNO", "country": "Norveška", "code": "NOR", "book_id": 2314043},
+    {"id": 204110, "key": "iceland", "name": "Úrvalsdeild", "country": "Island", "code": "ISL", "book_id": 2315462},
+    {"id": 282, "key": "wnbl", "name": "WNBL", "country": "Australija", "code": "WNBL", "book_id": 2328102},
+    {"id": 274, "key": "lnbarg", "name": "Liga Nacional", "country": "Argentina", "code": "ARG", "book_id": 2315603},
+    {"id": 238365, "key": "rus", "name": "Superliga", "country": "Rusija", "code": "RUS", "book_id": 2339821},
+    {"id": 493, "key": "ncaa", "name": "NCAA", "country": "SAD", "code": "NCAA", "book_id": 2313823},
+    {"id": 268, "key": "aba", "name": "ABA liga", "country": "Evropa", "code": "ABA", "book_id": 2314107},
+    {"id": 472, "key": "itaa", "name": "Lega A", "country": "Italija", "code": "ITA", "book_id": 2314021},
+    {"id": 197913, "key": "tursl", "name": "Super liga", "country": "Turska", "code": "TUR", "book_id": 2313839},
+    {"id": 462, "key": "isrpl", "name": "Premier liga", "country": "Izrael", "code": "ISR", "book_id": 2314182},
+    {"id": 415, "key": "fraprob", "name": "Pro B", "country": "Francuska", "code": "FRA2", "book_id": 2387819},
+    {"id": 417, "key": "fracup", "name": "Kup Francuske", "country": "Francuska", "code": "FRAC", "book_id": 2326061},
+    {"id": 565, "key": "swebl", "name": "Basketligan", "country": "Švedska", "code": "SWE", "book_id": 2313843},
+    {"id": 297, "key": "bulnbl", "name": "NBL", "country": "Bugarska", "code": "BUL", "book_id": 2314214},
     {"id": 213144, "key": "icelandw", "name": "Úrvalsdeild (Ž)", "country": "Island", "code": "ISLW",
-     "mx_id": 2394983},
-    {"id": 303, "key": "cba", "name": "CBA", "country": "Kina", "code": "CBA", "mx_id": 2313954},
-    {"id": 482, "key": "kbl", "name": "KBL", "country": "Južna Koreja", "code": "KBL", "mx_id": 2380450},
-    {"id": 481, "key": "wkbl", "name": "WKBL (Ž)", "country": "Južna Koreja", "code": "WKBL", "mx_id": 2313974},
-    {"id": 211487, "key": "qbl", "name": "QBL", "country": "Katar", "code": "QAT", "mx_id": 2377351},
-    {"id": 207009, "key": "slv", "name": "Liga Mayor", "country": "El Salvador", "code": "SLV", "mx_id": 2330227},
-    {"id": 317, "key": "denbl", "name": "Basketligaen", "country": "Danska", "code": "DEN", "mx_id": 2313968},
-    {"id": 280, "key": "nblau", "name": "NBL", "country": "Australija", "code": "AUS", "mx_id": 2315344},
-    {"id": 203908, "key": "chilnb", "name": "LNB", "country": "Čile", "code": "CHL", "mx_id": 2395984},
+     "book_id": 2394983},
+    {"id": 303, "key": "cba", "name": "CBA", "country": "Kina", "code": "CBA", "book_id": 2313954},
+    {"id": 482, "key": "kbl", "name": "KBL", "country": "Južna Koreja", "code": "KBL", "book_id": 2380450},
+    {"id": 481, "key": "wkbl", "name": "WKBL (Ž)", "country": "Južna Koreja", "code": "WKBL", "book_id": 2313974},
+    {"id": 211487, "key": "qbl", "name": "QBL", "country": "Katar", "code": "QAT", "book_id": 2377351},
+    {"id": 207009, "key": "slv", "name": "Liga Mayor", "country": "El Salvador", "code": "SLV", "book_id": 2330227},
+    {"id": 317, "key": "denbl", "name": "Basketligaen", "country": "Danska", "code": "DEN", "book_id": 2313968},
+    {"id": 280, "key": "nblau", "name": "NBL", "country": "Australija", "code": "AUS", "book_id": 2315344},
+    {"id": 203908, "key": "chilnb", "name": "LNB", "country": "Čile", "code": "CHL", "book_id": 2395984},
     {"id": 207008, "key": "colbpc", "name": "Baloncesto Profesional", "country": "Kolumbija", "code": "COL",
-     "mx_id": 2370633},
-    {"id": 210237, "key": "pol1b", "name": "1. liga", "country": "Poljska", "code": "POL", "mx_id": 2358947},
-    {"id": 215513, "key": "prylnb", "name": "LNB", "country": "Paragvaj", "code": "PRY", "mx_id": 2381490},
-    {"id": 548, "key": "svnskl", "name": "1. SKL", "country": "Slovenija", "code": "SVN", "mx_id": 2313969},
-    {"id": 197721, "key": "jpnbprem", "name": "B.League Premier", "country": "Japan", "code": "JPN", "mx_id": 2313965},
-    {"id": 206701, "key": "jpnbone", "name": "B.League One", "country": "Japan", "code": "JPN2", "mx_id": 2314113},
-    {"id": 212805, "key": "isrnl", "name": "National League", "country": "Izrael", "code": "ISR2", "mx_id": 2316038},
-    {"id": 321, "key": "gbrslb", "name": "SLB", "country": "Velika Britanija", "code": "UK", "mx_id": 2376194},
-    {"id": 203909, "key": "hunnbia", "name": "NB I. A", "country": "Mađarska", "code": "HUN", "mx_id": 2348405},
-    {"id": 527, "key": "rouda", "name": "Divizija A", "country": "Rumunija", "code": "ROU", "mx_id": 2314323},
-    {"id": 216565, "key": "beltd1", "name": "Top Division 1", "country": "Belgija", "code": "BEL", "mx_id": 2341912},
-    {"id": 238434, "key": "taitpbl", "name": "TPBL", "country": "Tajvan", "code": "TPBL", "mx_id": 2375648},
-    {"id": 306, "key": "croa1", "name": "A1 liga", "country": "Hrvatska", "code": "CRO", "mx_id": 2313962},
-    {"id": 218837, "key": "bnxt", "name": "BNXT liga", "country": "Evropa", "code": "BNXT", "mx_id": 2350882},
-    {"id": 414, "key": "fralnb", "name": "LNB Elite", "country": "Francuska", "code": "FRA", "mx_id": 2388436},
-    {"id": 208325, "key": "geosl", "name": "Superliga", "country": "Gruzija", "code": "GEO", "mx_id": 2340058},
-    {"id": 423, "key": "gerbbl", "name": "BBL", "country": "Nemačka", "code": "GER", "mx_id": 2319284},
-    {"id": 212395, "key": "itab", "name": "Serie B", "country": "Italija", "code": "ITA3", "mx_id": 2320232},
-    {"id": 512, "key": "polplk", "name": "PLK", "country": "Poljska", "code": "POL1", "mx_id": 2313956},
-    {"id": 537, "key": "srbkls", "name": "Naša liga (KLS)", "country": "Srbija", "code": "SRB", "mx_id": 2314106},
-    {"id": 544, "key": "svkext", "name": "Extraliga", "country": "Slovačka", "code": "SVK", "mx_id": 2313963},
-    {"id": 5608, "key": "phlpba", "name": "PBA Governors Cup", "country": "Filipini", "code": "PHL", "mx_id": 2400006},
-    {"id": 517, "key": "porlpb", "name": "LPB", "country": "Portugal", "code": "POR", "mx_id": 2314108},
-    {"id": 556, "key": "espfeb", "name": "Liga FEB", "country": "Španija", "code": "ESP2", "mx_id": 2374667},
-    {"id": 559, "key": "espacb", "name": "ACB", "country": "Španija", "code": "ACB", "mx_id": 2313840},
-    {"id": 210094, "key": "esplfw", "name": "Liga Femenina (Ž)", "country": "Španija", "code": "ESPW", "mx_id": 2395684},
-    {"id": 313, "key": "czenbl", "name": "NBL", "country": "Češka", "code": "CZE", "mx_id": 2313961},
-    {"id": 430, "key": "gerproa", "name": "Pro A", "country": "Nemačka", "code": "GER2", "mx_id": 2313971},
-    {"id": 223634, "key": "bihd1", "name": "Prvenstvo BiH", "country": "Bosna i Hercegovina", "code": "BIH", "mx_id": 2382106},
-    {"id": 4530, "key": "isrleaguecup", "name": "Liga kup", "country": "Izrael", "code": "ISRLC", "mx_id": 2324727},
-    {"id": 312, "key": "czecupbb", "name": "Kup", "country": "Češka", "code": "CZEC", "mx_id": 2343042},
-    {"id": 192318, "key": "ewq", "name": "Kval. za EuroBasket (Ž)", "country": "FIBA", "code": "EWQ", "mx_id": 2390595},
-    {"id": 207012, "key": "lbnd1", "name": "Liga Libana", "country": "Liban", "code": "LBN", "mx_id": 2326643},
+     "book_id": 2370633},
+    {"id": 210237, "key": "pol1b", "name": "1. liga", "country": "Poljska", "code": "POL", "book_id": 2358947},
+    {"id": 215513, "key": "prylnb", "name": "LNB", "country": "Paragvaj", "code": "PRY", "book_id": 2381490},
+    {"id": 548, "key": "svnskl", "name": "1. SKL", "country": "Slovenija", "code": "SVN", "book_id": 2313969},
+    {"id": 197721, "key": "jpnbprem", "name": "B.League Premier", "country": "Japan", "code": "JPN", "book_id": 2313965},
+    {"id": 206701, "key": "jpnbone", "name": "B.League One", "country": "Japan", "code": "JPN2", "book_id": 2314113},
+    {"id": 212805, "key": "isrnl", "name": "National League", "country": "Izrael", "code": "ISR2", "book_id": 2316038},
+    {"id": 321, "key": "gbrslb", "name": "SLB", "country": "Velika Britanija", "code": "UK", "book_id": 2376194},
+    {"id": 203909, "key": "hunnbia", "name": "NB I. A", "country": "Mađarska", "code": "HUN", "book_id": 2348405},
+    {"id": 527, "key": "rouda", "name": "Divizija A", "country": "Rumunija", "code": "ROU", "book_id": 2314323},
+    {"id": 216565, "key": "beltd1", "name": "Top Division 1", "country": "Belgija", "code": "BEL", "book_id": 2341912},
+    {"id": 238434, "key": "taitpbl", "name": "TPBL", "country": "Tajvan", "code": "TPBL", "book_id": 2375648},
+    {"id": 306, "key": "croa1", "name": "A1 liga", "country": "Hrvatska", "code": "CRO", "book_id": 2313962},
+    {"id": 218837, "key": "bnxt", "name": "BNXT liga", "country": "Evropa", "code": "BNXT", "book_id": 2350882},
+    {"id": 414, "key": "fralnb", "name": "LNB Elite", "country": "Francuska", "code": "FRA", "book_id": 2388436},
+    {"id": 208325, "key": "geosl", "name": "Superliga", "country": "Gruzija", "code": "GEO", "book_id": 2340058},
+    {"id": 423, "key": "gerbbl", "name": "BBL", "country": "Nemačka", "code": "GER", "book_id": 2319284},
+    {"id": 212395, "key": "itab", "name": "Serie B", "country": "Italija", "code": "ITA3", "book_id": 2320232},
+    {"id": 512, "key": "polplk", "name": "PLK", "country": "Poljska", "code": "POL1", "book_id": 2313956},
+    {"id": 537, "key": "srbkls", "name": "Naša liga (KLS)", "country": "Srbija", "code": "SRB", "book_id": 2314106},
+    {"id": 544, "key": "svkext", "name": "Extraliga", "country": "Slovačka", "code": "SVK", "book_id": 2313963},
+    {"id": 5608, "key": "phlpba", "name": "PBA Governors Cup", "country": "Filipini", "code": "PHL", "book_id": 2400006},
+    {"id": 517, "key": "porlpb", "name": "LPB", "country": "Portugal", "code": "POR", "book_id": 2314108},
+    {"id": 556, "key": "espfeb", "name": "Liga FEB", "country": "Španija", "code": "ESP2", "book_id": 2374667},
+    {"id": 559, "key": "espacb", "name": "ACB", "country": "Španija", "code": "ACB", "book_id": 2313840},
+    {"id": 210094, "key": "esplfw", "name": "Liga Femenina (Ž)", "country": "Španija", "code": "ESPW", "book_id": 2395684},
+    {"id": 313, "key": "czenbl", "name": "NBL", "country": "Češka", "code": "CZE", "book_id": 2313961},
+    {"id": 430, "key": "gerproa", "name": "Pro A", "country": "Nemačka", "code": "GER2", "book_id": 2313971},
+    {"id": 223634, "key": "bihd1", "name": "Prvenstvo BiH", "country": "Bosna i Hercegovina", "code": "BIH", "book_id": 2382106},
+    {"id": 4530, "key": "isrleaguecup", "name": "Liga kup", "country": "Izrael", "code": "ISRLC", "book_id": 2324727},
+    {"id": 312, "key": "czecupbb", "name": "Kup", "country": "Češka", "code": "CZEC", "book_id": 2343042},
+    {"id": 192318, "key": "ewq", "name": "Kval. za EuroBasket (Ž)", "country": "FIBA", "code": "EWQ", "book_id": 2390595},
+    {"id": 207012, "key": "lbnd1", "name": "Liga Libana", "country": "Liban", "code": "LBN", "book_id": 2326643},
 ]
-MX_COMP = {mid: c["id"] for c in COMPETITIONS for mid in (c["mx_id"], *c.get("mx_extra", ()))}
+BOOK_COMP = {mid: c["id"] for c in COMPETITIONS for mid in (c["book_id"], *c.get("book_extra", ()))}
 
 ML = ("50291", "50293")  # winner incl. overtime: home, away
 # Each set is (line param, home/over code, away/under code); the param holds the home-side line.
@@ -122,21 +122,21 @@ TEAM_TOTALS = {
     "away": [("awayOverUnderOvertime", "50479", "50478"), ("awayOverUnderOvertime2", "51543", "51542")],
 }
 
-# Lines MerkurXtip prices that Pinnacle does not are priced from a normal model fitted to Pinnacle's ladder.
+# Lines the bookie prices that Pinnacle does not are priced from a normal model fitted to Pinnacle's ladder.
 # The sigmas are what Pinnacle's own ladders fit to (spread ~10, total ~14 points); they are only a fallback
 # when the ladder is too short to fit one.
 SIGMA = {"spreads": 10.0, "totals": 14.0, "home": 10.0, "away": 10.0}
 MAX_MODEL_GAP = {"spreads": 4.0, "totals": 5.0, "home": 4.0, "away": 4.0}  # points from the nearest Pinnacle line
-STALE_GAP = 2.0  # MerkurXtip main line this far from Pinnacle's: the offer lags
+STALE_GAP = 2.0  # The bookie main line this far from Pinnacle's: the offer lags
 NORMAL = NormalDist()
 
 # (key, label, PinnWire period number, spread of the margin/total relative to the full game).
 # PinnWire numbers basketball periods 0 = game, 1 = 1st half, 3 = 1st quarter; it quotes the quarter only close to
 # the start, so a quarter is compared once it appears.
 PERIODS = [("ft", "Ceo meč", 0, 1.0), ("ht", "1. poluvreme", 1, 0.71), ("q1", "1. četvrtina", 3, 0.5)]
-# MerkurXtip codes per period: winner (draw no bet for the half and the quarter) and sets of
+# The bookie codes per period: winner (draw no bet for the half and the quarter) and sets of
 # (line param, home/over code, away/under code).
-MX_PERIOD = {
+BOOK_PERIOD = {
     "ft": {"ml": ML, "spreads": SPREADS, "totals": TOTALS, "home": TEAM_TOTALS["home"], "away": TEAM_TOTALS["away"]},
     "ht": {
         "ml": ("611", "612"),
@@ -155,7 +155,7 @@ MX_PERIOD = {
 }
 
 GROUPS = [
-    # key in pinnacle_markets()/merkur_markets(), group label, outcome sides
+    # key in pinnacle_markets()/book_markets(), group label, outcome sides
     ("ml", "Pobednik", (("home", "1"), ("away", "2"))),
     ("spreads", "Hendikep", (("home", "1"), ("away", "2"))),
     ("totals", "Ukupno poena", (("over", "Više"), ("under", "Manje"))),
@@ -179,7 +179,7 @@ def pinnacle_limits(event, number=0):
 
 
 def pinnacle_markets(event, number=0):
-    """Pinnacle prices of one period keyed like merkur_markets(): ml {side: odds}, lines {line: {side: odds}}."""
+    """Pinnacle prices of one period keyed like book_markets(): ml {side: odds}, lines {line: {side: odds}}."""
     markets = pw.period(event, number)
     ml = pw.priced(markets.get("money_line") or {}, ("home", "away"))
     return {
@@ -190,7 +190,7 @@ def pinnacle_markets(event, number=0):
     }
 
 
-SWAPPED = "pinSwapped"  # MerkurXtip row whose teams are in the reverse of Pinnacle's order
+SWAPPED = "pinSwapped"  # The bookie row whose teams are in the reverse of Pinnacle's order
 _FLIP = {"home": "away", "away": "home"}
 
 
@@ -199,7 +199,7 @@ def _flip_sides(prices):
 
 
 def swap_sides(markets):
-    """merkur_markets() of a SWAPPED row turned to Pinnacle's order: home and away prices exchange, a handicap line
+    """book_markets() of a SWAPPED row turned to Pinnacle's order: home and away prices exchange, a handicap line
     changes sign, the team totals trade places; totals and the draw stay."""
     out = dict(markets)
     for key, value in markets.items():
@@ -216,7 +216,7 @@ def swap_sides(markets):
 
 
 def reversible(fn):
-    """Decorate a merkur_markets(row, ...): a row flagged SWAPPED is returned in Pinnacle's team order."""
+    """Decorate a book_markets(row, ...): a row flagged SWAPPED is returned in Pinnacle's team order."""
     @functools.wraps(fn)
     def wrapper(row, *args, **kwargs):
         out = fn(row, *args, **kwargs)
@@ -225,19 +225,19 @@ def reversible(fn):
 
 
 @reversible
-def merkur_markets(row, period="ft"):
-    """One MerkurXtip basketball offer row -> the same shape as pinnacle_markets(), for one period."""
+def book_markets(row, period="ft"):
+    """One bookie basketball offer row -> the same shape as pinnacle_markets(), for one period."""
     params = row.get("params") or {}
-    codes = MX_PERIOD[period]
+    codes = BOOK_PERIOD[period]
     return {
-        "ml": mx._pick(row.get("odds") or {}, dict(zip(("home", "away"), codes["ml"]))),
+        "ml": bk._pick(row.get("odds") or {}, dict(zip(("home", "away"), codes["ml"]))),
         "spreads": common.param_lines(row, codes["spreads"], ("home", "away")),
         "totals": common.param_lines(row, codes["totals"], ("over", "under")),
         "home": common.param_lines(row, codes["home"], ("over", "under")),
         "away": common.param_lines(row, codes["away"], ("over", "under")),
-        # MerkurXtip's own main lines: the first set of each market (params without a number suffix)
-        "main": {"spreads": mx._param_line(params, codes["spreads"][0][0]),
-                 "totals": mx._param_line(params, codes["totals"][0][0])},
+        # The bookie's own main lines: the first set of each market (params without a number suffix)
+        "main": {"spreads": bk._param_line(params, codes["spreads"][0][0]),
+                 "totals": bk._param_line(params, codes["totals"][0][0])},
     }
 
 
@@ -281,39 +281,39 @@ def model_probability(lines, key, line, scale=1.0):
     return NORMAL.cdf(z0 + (t0 - t) / sigma), margin
 
 
-def model_row(group, line, labels, merkur, p_first, overround):
+def model_row(group, line, labels, book, p_first, overround):
     """Compare row for a line priced from the model: the Pinnacle price is the fair price plus the ladder margin."""
     probs = {labels[0][0]: p_first, labels[1][0]: 1 - p_first}
     outcomes = []
     for key, label in labels:
         fair = 1 / probs[key]
-        outcomes.append({"key": key, "label": label, "merkur": merkur[key],
+        outcomes.append({"key": key, "label": label, "book": book[key],
                          "pinnacle": round(1 / (probs[key] * (1 + overround)), 3), "fair": round(fair, 3),
-                         "ev": round(merkur[key] / fair - 1, 4)})
+                         "ev": round(book[key] / fair - 1, 4)})
     return {
         "group": group, "line": line, "outcomes": outcomes, "modeled": True,
-        "merkurMargin": round((sum(1 / o for o in merkur.values()) - 1) * 100, 2),
+        "bookMargin": round((sum(1 / o for o in book.values()) - 1) * 100, 2),
         "pinnacleMargin": round(overround * 100, 2),
         "maxEv": max(o["ev"] for o in outcomes),
     }
 
 
-def compare(pin, merkur, period="ft", scale=1.0, limits=None):
-    """Every market both books price, as compare rows; Merkur lines outside Pinnacle's ladder are modelled."""
+def compare(pin, book, period="ft", scale=1.0, limits=None):
+    """Every market both books price, as compare rows; the bookie lines outside Pinnacle's ladder are modelled."""
     rows = []
     for key, group, labels in GROUPS:
         if key == "ml":
-            if pin["ml"] and merkur["ml"]:
-                rows.append(common.compare_row(group, None, labels, merkur["ml"], pin["ml"]))
+            if pin["ml"] and book["ml"]:
+                rows.append(common.compare_row(group, None, labels, book["ml"], pin["ml"]))
             continue
-        for line in sorted(merkur[key]):
+        for line in sorted(book[key]):
             if line in pin[key]:
-                rows.append(common.compare_row(group, line, labels, merkur[key][line], pin[key][line],
+                rows.append(common.compare_row(group, line, labels, book[key][line], pin[key][line],
                                                (limits or {}).get(key, {}).get(line)))
                 continue
             model = model_probability(pin[key], key, line, scale)
             if model:
-                rows.append(model_row(group, line, labels, merkur[key][line], *model))
+                rows.append(model_row(group, line, labels, book[key][line], *model))
     for r in rows:
         r["period"] = period
     return rows
@@ -326,21 +326,21 @@ def main_line(lines, sides):
     return min(lines, key=lambda line: abs(lines[line][sides[0]] - lines[line][sides[1]]))
 
 
-def stale_gaps(pin, merkur):
-    """{group: MerkurXtip main line - Pinnacle main line} where the gap is at least STALE_GAP.
+def stale_gaps(pin, book):
+    """{group: the bookie main line - Pinnacle main line} where the gap is at least STALE_GAP.
 
-    A lower MerkurXtip total favours the over, a higher one the under; a higher home handicap favours the home side.
+    A lower the bookie total favours the over, a higher one the under; a higher home handicap favours the home side.
     """
     out = {}
     for key, group, sides in (("spreads", "Hendikep", ("home", "away")), ("totals", "Ukupno poena", ("over", "under"))):
-        pin_main, mx_main = main_line(pin[key], sides), merkur["main"][key]
-        if pin_main is not None and mx_main is not None and abs(mx_main - pin_main) >= STALE_GAP:
-            out[group] = round(mx_main - pin_main, 2)
+        pin_main, book_main = main_line(pin[key], sides), book["main"][key]
+        if pin_main is not None and book_main is not None and abs(book_main - pin_main) >= STALE_GAP:
+            out[group] = round(book_main - pin_main, 2)
     return out
 
 
 def favours(group, gap, key):
-    """Does the outcome `key` benefit from a MerkurXtip main line `gap` points away from Pinnacle's?"""
+    """Does the outcome `key` benefit from a bookie main line `gap` points away from Pinnacle's?"""
     if group == "Ukupno poena":
         return key == ("over" if gap < 0 else "under")
     return key == ("home" if gap > 0 else "away")
@@ -360,12 +360,12 @@ def board_cell(group_rows, pin_lines, sides):
         out = {o["key"]: o for o in row["outcomes"]}
         return {"line": row["line"], "fair": {k: o["fair"] for k, o in out.items()},
                 "pinnacle": {k: o["pinnacle"] for k, o in out.items()},
-                "merkur": {k: o["merkur"] for k, o in out.items()},
+                "book": {k: o["book"] for k, o in out.items()},
                 "ev": {k: o["ev"] for k, o in out.items()}}
     prices = pin_lines[target]
     fair, _ = pw.fair_odds(prices)
     return {"line": target, "fair": {k: round(v, 3) for k, v in fair.items()}, "pinnacle": prices,
-            "merkur": None, "ev": None}
+            "book": None, "ev": None}
 
 
 PERIOD_LABELS = {key: label for key, label, _, _ in PERIODS}
@@ -373,9 +373,9 @@ PREFIXES = {"ft": "", "ht": "1.pol ", "q1": "1.čet "}
 
 
 def value_items(match_id, rows, stale=None):
-    """Every outcome where the MerkurXtip price beats the Pinnacle price, one item each; `stale` is stale_gaps()."""
+    """Every outcome where the bookie price beats the Pinnacle price, one item each; `stale` is stale_gaps()."""
     def gap(period, r, o):
-        # MerkurXtip main line vs Pinnacle's, when this outcome is the side that gap favours
+        # The bookie main line vs Pinnacle's, when this outcome is the side that gap favours
         found = (stale or {}).get(r["group"])
         return found if period == "ft" and found and favours(r["group"], found, o["key"]) else None
 
@@ -383,15 +383,15 @@ def value_items(match_id, rows, stale=None):
 
 
 def swapped_entries(base, row):
-    """A MerkurXtip row offered in both team orders: the second entry has home and away exchanged and its row
-    flagged SWAPPED, so a game MerkurXtip lists the other way round than Pinnacle still pairs (and is priced
-    the right way round). mx.pair keeps one entry per offer id."""
+    """A bookie row offered in both team orders: the second entry has home and away exchanged and its row
+    flagged SWAPPED, so a game the bookie lists the other way round than Pinnacle still pairs (and is priced
+    the right way round). bk.pair keeps one entry per offer id."""
     return [{**base, "home": row.get("home", ""), "away": row.get("away", ""), "row": row},
             {**base, "home": row.get("away", ""), "away": row.get("home", ""), "row": {**row, SWAPPED: True}}]
 
 
-def pair_inputs(events, offer, mx_comp=MX_COMP, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
-    comp_fn = comp_fn or (lambda r: mx_comp.get(r.get("leagueId")))
+def pair_inputs(events, offer, book_comp=BOOK_COMP, comp_fn=None, is_prematch=bk.is_prematch, by_comp=True):
+    comp_fn = comp_fn or (lambda r: book_comp.get(r.get("leagueId")))
     pin = []
     for e in events:
         home, away = e.get("home", ""), e.get("away", "")
@@ -415,37 +415,37 @@ def pair_inputs(events, offer, mx_comp=MX_COMP, comp_fn=None, is_prematch=mx.is_
     return pin, mer
 
 
-def pair_events(events, offer, mx_comp=MX_COMP, score_fn=None, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
-    pin, mer = pair_inputs(events, offer, mx_comp, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
+def pair_events(events, offer, book_comp=BOOK_COMP, score_fn=None, comp_fn=None, is_prematch=bk.is_prematch, by_comp=True):
+    pin, mer = pair_inputs(events, offer, book_comp, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
     min_score = 0.5 if by_comp else common.OTHER_MIN_SCORE
     score = score_fn if by_comp else (score_fn or common.other_score)
-    return {pid: (m["row"], s) for pid, (m, s) in mx.pair(pin, mer, min_score=min_score, score_fn=score).items()}
+    return {pid: (m["row"], s) for pid, (m, s) in bk.pair(pin, mer, min_score=min_score, score_fn=score).items()}
 
 
-def unpaired_hints(events, offer, pairs, mx_comp=MX_COMP, score_fn=None, comp_fn=None, is_prematch=mx.is_prematch, by_comp=True):
-    """{pinnacle id: closest unused MerkurXtip offer row} for events without a pair, for the "missing" view."""
-    pin, mer = pair_inputs(events, offer, mx_comp, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
+def unpaired_hints(events, offer, pairs, book_comp=BOOK_COMP, score_fn=None, comp_fn=None, is_prematch=bk.is_prematch, by_comp=True):
+    """{pinnacle id: closest unused bookie offer row} for events without a pair, for the "missing" view."""
+    pin, mer = pair_inputs(events, offer, book_comp, comp_fn=comp_fn, is_prematch=is_prematch, by_comp=by_comp)
     score = score_fn if by_comp else (score_fn or common.other_score)
-    return mx.hints(pin, mer, pairs, score_fn=score)
+    return bk.hints(pin, mer, pairs, score_fn=score)
 
 
 def board_match(event, pin, hit, rows, periods, groups, prefixes, stale=None, league_id=None):
     """Board entry of one Pinnacle event, plus every compare row of it.
 
     `groups` are the (handicap, total) group labels of the board cells, `prefixes` the period labels of the best
-    edge, `stale` the "Merkur kasni" gaps (basketball), `league_id` the competition when not the PinnWire league.
+    edge, `stale` the "kasni" gaps (basketball), `league_id` the competition when not the PinnWire league.
     """
     every_row = rows + [r for found in periods.values() for r in found]
-    merkur = None
+    book = None
     if hit:
         row, score = hit
         swapped = bool(row.get(SWAPPED))  # names in Pinnacle's order, like the prices
         ml_row = next((r for r in rows if r["group"] == "Pobednik"), None)
-        merkur = {
+        book = {
             "id": row.get("id"), "home": row.get("away" if swapped else "home", ""),
             "away": row.get("home" if swapped else "away", ""), "score": score,
             "kickoffDiff": round(((row.get("kickOffTime") or 0) - event_ts(event)) / 60000),
-            "ml": {o["key"]: {"odds": o["merkur"], "ev": o["ev"]} for o in ml_row["outcomes"]} if ml_row else None,
+            "ml": {o["key"]: {"odds": o["book"], "ev": o["ev"]} for o in ml_row["outcomes"]} if ml_row else None,
             "best": common.best_edge([(r.get("period", "ft"), r) for r in every_row], prefixes),
             "compared": len(every_row),
             "stale": [{"group": g, "gap": gap} for g, gap in (stale or {}).items()],
@@ -464,15 +464,15 @@ def board_match(event, pin, hit, rows, periods, groups, prefixes, stale=None, le
         "margin": margin,
         "spread": board_cell([r for r in exact if r["group"] == groups[0]], pin["spreads"], ("home", "away")),
         "total": board_cell([r for r in exact if r["group"] == groups[1]], pin["totals"], ("over", "under")),
-        "merkur": merkur,
+        "book": book,
         "rows": rows,
         "periods": periods,
     }
     return match, every_row
 
 
-def shape_match(event, hit, decode=merkur_markets):
-    """Board entry of one Pinnacle event, plus its value items from the paired MerkurXtip row."""
+def shape_match(event, hit, decode=book_markets):
+    """Board entry of one Pinnacle event, plus its value items from the paired bookie row."""
     pin = pinnacle_markets(event)
     rows, stale, periods = [], {}, {}
     if hit:
@@ -490,7 +490,7 @@ def shape_match(event, hit, decode=merkur_markets):
     return match, value_items(event.get("event_id"), every_row, stale)
 
 
-# compare row group -> PinnWire drop market, for the MerkurXtip price on a drop alert
+# compare row group -> PinnWire drop market, for the bookie price on a drop alert
 DROP_GROUPS = {"Pobednik": "moneyline", "Hendikep": "spread", "Ukupno poena": "total"}
 
 
@@ -509,10 +509,10 @@ def drop_quotes(event, match):
 
 
 def clv_matches(matches):
-    """Board matches with a MerkurXtip pair in the shape ClvStore.observe() / PriceStore.observe() take."""
+    """Board matches with a bookie pair in the shape ClvStore.observe() / PriceStore.observe() take."""
     return [{"id": m["id"], "home": m["home"], "away": m["away"], "league": m["leagueName"], "starts": m["starts"],
              "rows": [(r.get("period", "ft"), r) for r in m["rows"] + [r for found in m["periods"].values() for r in found]]}
-            for m in matches if m["merkur"]]
+            for m in matches if m["book"]]
 
 
 class BasketballState(common.SnapshotState):
@@ -522,9 +522,9 @@ class BasketballState(common.SnapshotState):
     offer_path = OFFER_PATH
     clv_name = "basketball"
     competition_list = COMPETITIONS
-    mx_comp = MX_COMP  # MerkurXtip leagueId -> PinnWire league_id
+    book_comp = BOOK_COMP  # bookie leagueId -> PinnWire league_id
     league_ids = frozenset(c["id"] for c in COMPETITIONS)
-    score_fn = None  # team name score for pairing, None for merkur_client.name_score
+    score_fn = None  # team name score for pairing, None for bookie_client.name_score
     other_cache = None  # (offer, signature, unpaired ids, hints, offered) of the untracked leagues
 
     # ----- hooks
@@ -545,11 +545,11 @@ class BasketballState(common.SnapshotState):
         return shape_match(event, hit, decode=self.decode_markets)
 
     def pair(self, events, offer):
-        return pair_events(events, offer, self.mx_comp, self.score_fn,
+        return pair_events(events, offer, self.book_comp, self.score_fn,
                            comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=self.bookie.pair_by_comp)
 
     def hints(self, events, offer, pairs):
-        return unpaired_hints(events, offer, pairs, self.mx_comp, self.score_fn,
+        return unpaired_hints(events, offer, pairs, self.book_comp, self.score_fn,
                               comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=self.bookie.pair_by_comp)
 
     def offered(self, offer):
@@ -565,7 +565,7 @@ class BasketballState(common.SnapshotState):
         return [{**c, "count": counts.get(c["id"], 0)} for c in self.competition_list]
 
     def match(self, event_id):
-        """One match compared against fresh single-match MerkurXtip odds (no PinnWire request)."""
+        """One match compared against fresh single-match bookie odds (no PinnWire request)."""
         if self.events is None:
             self.refresh(if_empty=True)
         with self.lock:
@@ -573,12 +573,12 @@ class BasketballState(common.SnapshotState):
         if event is None or not self.complete(event) or not self.tracked(event):
             raise LookupError("Meč nije u ponudi (možda je počeo ili uklonjen).")
         hit = self.pairs.get(event_id)
-        error, fetched = "", self.merkur.stamp
+        error, fetched = "", self.book.stamp
         if hit is not None:
             row, score = hit
             if getattr(self.bookie, "supports_match", True):
                 try:
-                    row, fetched = {**hit[0], **self.merkur.api.match(row["id"])}, common.utc_stamp()
+                    row, fetched = {**hit[0], **self.book.api.match(row["id"])}, common.utc_stamp()
                 except (RuntimeError, LookupError) as exc:
                     error = str(exc)
             hit = (row, score)
@@ -588,7 +588,7 @@ class BasketballState(common.SnapshotState):
     def board(self, refresh=False, full=False):
         if refresh or full or self.events is None:
             self.refresh(full=full, if_empty=not (refresh or full))
-        offer = self.merkur_offer(refresh=refresh or full)
+        offer = self.book_offer(refresh=refresh or full)
         with self.lock:
             now = common.utc_now()
             upcoming = [e for e in (self.events or {}).values() if common.is_upcoming(e, now) and self.complete(e)]
@@ -601,7 +601,7 @@ class BasketballState(common.SnapshotState):
         for event in events:
             match, items = self.shape(event, pairs.get(str(event["event_id"])))
             match["hint"] = hints.get(str(event["event_id"]))
-            if match["merkur"]:
+            if match["book"]:
                 quotes.update(self.drop_quotes(event, match))
             # a match without any Pinnacle price is not worth a row
             if match["ml"] or match["spread"] or match["total"]:
@@ -625,16 +625,16 @@ class BasketballState(common.SnapshotState):
             "values": sorted(values, key=lambda v: v["ev"], reverse=True),
             "bookie": self.bookie.meta(),
             "bookies": bookie_adapter.adapter_catalog(),
-            "merkur": {
-                "fetchedAt": self.merkur.stamp,
-                "error": self.merkur.error,
-                "paired": sum(1 for m in matches if m["merkur"]),
+            "book": {
+                "fetchedAt": self.book.stamp,
+                "error": self.book.error,
+                "paired": sum(1 for m in matches if m["book"]),
                 "offered": self.offered(offer),
             },
         }
 
     def missing_other(self, events, offer, used):
-        """Board entries of untracked events MerkurXtip does not offer (cached until the offer or the set of events
+        """Board entries of untracked events the bookie does not offer (cached until the offer or the set of events
         changes: the pairing without a competition check is slow)."""
         signature = (frozenset(str(e["event_id"]) for e in events), frozenset(used))
         cache = self.other_cache

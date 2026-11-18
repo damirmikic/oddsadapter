@@ -11,14 +11,14 @@ const DROP_SIDES = { home: "1", draw: "X", away: "2", over: "V", under: "M" };
 const DROP_PERIODS = { football: { 1: "1. pol. " }, basketball: { 1: "1. pol. ", 3: "1. čet. " }, tennis: { 1: "1. set " }, hockey: { 1: "1. per. ", 2: "2. per. ", 3: "3. per. " }, mma: {}, handball: { 1: "1. pol. " } };
 
 // One alert per match, market, period and side: of several drops on different lines the one with the largest
-// MerkurXtip edge stays (without a MerkurXtip price, the largest drop).
-const dropRank = (a) => a.mxEv ?? -Infinity;
+// The bookie edge stays (without a bookie price, the largest drop).
+const dropRank = (a) => a.bookEv ?? -Infinity;
 
 const dropBetter = (a, b) => (dropRank(a) !== dropRank(b) ? dropRank(a) > dropRank(b) : a.pct > b.pct);
 
 // Polls the server's buffer of PinnWire's SSE drop stream (local, no PinnWire request) for every sport and keeps
 // the prematch drops of at least `threshold` percent that belong to matches on the loaded boards, with the
-// MerkurXtip price of the same outcome. `toasts` are the ones not yet seen (only Merkur edges with `edgeOnly`);
+// The bookie price of the same outcome. `toasts` are the ones not yet seen (only bookie edges with `edgeOnly`);
 // `alerts` is the history.
 export function useDropAlerts(boards, enabled, threshold, apiKeySet, edgeOnly) {
   const seen = useRef(new Set());
@@ -62,7 +62,7 @@ export function useDropAlerts(boards, enabled, threshold, apiKeySet, edgeOnly) {
               starts: match.starts, at: Date.now() - (d.age_s || 0) * 1000,
               market: period + (DROP_MARKETS[d.market] || d.market), line, side: DROP_SIDES[d.side] || d.side,
               from: d.from, to: d.to, pct: d.drop_pct, nvp: d.nvp,
-              mx: d.merkur?.odds ?? null, mxEv: d.merkur?.ev ?? null,
+              book: d.book?.odds ?? null, bookEv: d.book?.ev ?? null,
             });
           }
         } catch {
@@ -84,7 +84,7 @@ export function useDropAlerts(boards, enabled, threshold, apiKeySet, edgeOnly) {
       const replaced = new Set(shown.map((a) => a.group));
       const keep = (list) => list.filter((a) => !replaced.has(a.group));
       setAlerts((list) => [...shown, ...keep(list)].slice(0, 300));
-      const fresh = edgeRef.current ? shown.filter((a) => a.mxEv > 0) : shown;
+      const fresh = edgeRef.current ? shown.filter((a) => a.bookEv > 0) : shown;
       if (notify.current && fresh.length) {
         setToasts((list) => [...fresh, ...keep(list)].slice(0, 30));
       }
@@ -114,7 +114,7 @@ const dropTimeFmt = new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "
 export function AlertsPage({ alerts, threshold, setThreshold, notify, setNotify, edgeOnly, setEdgeOnly, stream, onClear, onOpen }) {
   const { label } = useBookie();
   const [sportFilter, setSportFilter] = useState("all");
-  const shown = alerts.filter((a) => (sportFilter === "all" || a.sport === sportFilter) && (!edgeOnly || a.mxEv > 0));
+  const shown = alerts.filter((a) => (sportFilter === "all" || a.sport === sportFilter) && (!edgeOnly || a.bookEv > 0));
   return (
     <div className="alerts-page">
       <div className="filters">
@@ -167,8 +167,8 @@ export function AlertsPage({ alerts, threshold, setThreshold, notify, setNotify,
                   <td>{fmtOdds(a.from)} → <b>{fmtOdds(a.to)}</b></td>
                   <td className="drop-pct">−{a.pct.toFixed(1)}%</td>
                   <td>{a.nvp ? fmtOdds(a.nvp) : "—"}</td>
-                  <td>{a.mx != null ? <b>{fmtOdds(a.mx)}</b> : "—"}</td>
-                  <td>{a.mxEv != null ? <span className={`ev-chip ${evClass(a.mxEv)}`}>{fmtEv(a.mxEv)}</span> : "—"}</td>
+                  <td>{a.book != null ? <b>{fmtOdds(a.book)}</b> : "—"}</td>
+                  <td>{a.bookEv != null ? <span className={`ev-chip ${evClass(a.bookEv)}`}>{fmtEv(a.bookEv)}</span> : "—"}</td>
                 </tr>
               ))}
             </tbody>

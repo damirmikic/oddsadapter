@@ -1,4 +1,4 @@
-// Value view: filters and the table of outcomes where MerkurXtip beats Pinnacle.
+// Value view: filters and the table of outcomes where the bookie beats Pinnacle.
 import { useEffect, useMemo, useState } from "react";
 import { readStored, writeStored } from "./api.js";
 import { evClass, fmt2, fmtEv, fmtKickoffShort, fmtMargins, fmtOdds, marketLine } from "./format.js";
@@ -155,7 +155,7 @@ export function ValueTable({ values, matchesById, competitions, selectedId, onSe
                     {v.sport && <SportIcon sport={v.sport} />}
                     {fmtKickoffShort(new Date(match.starts))}
                     {comp && <CompBadge competition={comp} />}
-                    <KickoffWarning diff={match.merkur?.kickoffDiff} />
+                    <KickoffWarning diff={match.book?.kickoffDiff} />
                   </div>
                   <div className="mc-teams">
                     <b>{match.home}</b> <span>vs</span> <b>{match.away}</b>
@@ -171,7 +171,7 @@ export function ValueTable({ values, matchesById, competitions, selectedId, onSe
                 </td>
                 <td className="value-side">{v.label}</td>
                 <td className="mc-odds mc-click mc-group" onClick={oddsClick}>
-                  <span className={`mc-cell ${v.ev >= 0 ? "mx-fair" : "mx-above"}`}>{fmt2(v.merkur)}</span>
+                  <span className={`mc-cell ${v.ev >= 0 ? "book-fair" : "book-above"}`}>{fmt2(v.book)}</span>
                 </td>
                 <td className="mc-odds mc-click" onClick={oddsClick}>{fmtOdds(v.pinnacle)}</td>
                 <td className="mc-odds mc-click muted" onClick={oddsClick}>{fmtOdds(v.fair)}</td>
@@ -180,7 +180,7 @@ export function ValueTable({ values, matchesById, competitions, selectedId, onSe
                   <span className={`ev-chip ${evClass(v.ev)}`}>{fmtEv(v.ev)}</span>
                 </td>
                 <td className="mc-group muted value-margin">
-                  {fmtMargins(v.merkurMargin, v.pinnacleMargin)}
+                  {fmtMargins(v.bookMargin, v.pinnacleMargin)}
                 </td>
                 <td className="mc-group value-change"><ChangeTimes value={v} /></td>
                 <td className="mc-group value-mark">

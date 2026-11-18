@@ -7,7 +7,7 @@ import { useBookie } from "./ui.jsx";
 export const histKey = (period, group, line, key) => `${period}|${group}|${line ?? ""}|${key}`;
 
 // Stored prices of one board match (recorded at every board, see price_history.py):
-// Map histKey -> [[epoch s, pinnacle, merkur, fair]], null until loaded or when the store is off.
+// Map histKey -> [[epoch s, pinnacle, book, fair]], null until loaded or when the store is off.
 export function usePriceHistory(sport, matchId, reloadKey) {
   const [history, setHistory] = useState(null);
   useEffect(() => {
@@ -70,7 +70,7 @@ export function Sparkline({ points, active, onToggle }) {
     >
       <svg viewBox="0 0 64 20" width="64" height="20" aria-hidden="true">
         <path className="spark-pin" d={stepPath(points, 1, scales, end)} />
-        <path className="spark-mx" d={stepPath(points, 2, scales, end)} />
+        <path className="spark-book" d={stepPath(points, 2, scales, end)} />
       </svg>
     </button>
   );
@@ -105,12 +105,12 @@ export function PriceChart({ points, label }) {
   const at = hover == null ? null : points.findLast((p) => p[0] <= hover) || points[0];
   // end labels sit at the last price of each book, pushed apart when they would overlap
   let pinY = scales.y(last[1]);
-  let mxY = scales.y(last[2]);
-  if (Math.abs(pinY - mxY) < 11) {
-    const mid = (pinY + mxY) / 2;
-    const up = pinY <= mxY ? -1 : 1;
+  let bookY = scales.y(last[2]);
+  if (Math.abs(pinY - bookY) < 11) {
+    const mid = (pinY + bookY) / 2;
+    const up = pinY <= bookY ? -1 : 1;
     pinY = mid + up * 5.5;
-    mxY = mid - up * 5.5;
+    bookY = mid - up * 5.5;
   }
   return (
     <figure className="price-chart" ref={figure}>
@@ -118,7 +118,7 @@ export function PriceChart({ points, label }) {
         <b>{label}</b>
         <span className="legend">
           <span><i className="lg-pin" />Pinnacle</span>
-          <span><i className="lg-mx" />{bookie.label}</span>
+          <span><i className="lg-book" />{bookie.label}</span>
           <span><i className="lg-fair" />Pinnacle fer</span>
         </span>
       </figcaption>
@@ -139,14 +139,14 @@ export function PriceChart({ points, label }) {
         <text className="axis" x={width - CHART_PAD.right} y={CHART_H - 5} textAnchor="end">sada</text>
         <path className="line-fair" d={stepPath(points, 3, scales, end)} />
         <path className="line-pin" d={stepPath(points, 1, scales, end)} />
-        <path className="line-mx" d={stepPath(points, 2, scales, end)} />
+        <path className="line-book" d={stepPath(points, 2, scales, end)} />
         <text className="end-label" x={width - CHART_PAD.right + 5} y={pinY} dy="0.32em">{fmtOdds(last[1])}</text>
-        <text className="end-label" x={width - CHART_PAD.right + 5} y={mxY} dy="0.32em">{fmt2(last[2])}</text>
+        <text className="end-label" x={width - CHART_PAD.right + 5} y={bookY} dy="0.32em">{fmt2(last[2])}</text>
         {at && (
           <g>
             <line className="crosshair" x1={scales.x(hover)} x2={scales.x(hover)} y1={CHART_PAD.top} y2={CHART_H - CHART_PAD.bottom} />
             <circle className="dot-pin" cx={scales.x(hover)} cy={scales.y(at[1])} r="4" />
-            <circle className="dot-mx" cx={scales.x(hover)} cy={scales.y(at[2])} r="4" />
+            <circle className="dot-book" cx={scales.x(hover)} cy={scales.y(at[2])} r="4" />
           </g>
         )}
       </svg>
@@ -154,7 +154,7 @@ export function PriceChart({ points, label }) {
         <div className="chart-tip" style={{ left: `${(scales.x(hover) / width) * 100}%` }}>
           <span>{fmtWhen(new Date(at[0] * 1000))}</span>
           <i style={{ background: "var(--pin-line)" }} />PIN <b>{fmtOdds(at[1])}</b>
-          <i style={{ background: "var(--mx-line)" }} />{bookie.short} <b>{fmt2(at[2])}</b>
+          <i style={{ background: "var(--book-line)" }} />{bookie.short} <b>{fmt2(at[2])}</b>
           <span> · fer {fmtOdds(at[3])}</span>
         </div>
       )}
@@ -168,7 +168,7 @@ export function ChangeTimes({ value }) {
   const seen = value.seenAt ? `Prati se od ${fmtWhen(new Date(value.seenAt))}` : "Istorija kvota nije dostupna";
   return (
     <div title={seen}>
-      {[[short, value.mxChangedAt], ["PIN", value.pinChangedAt]].map(([book, at]) => (
+      {[[short, value.bookChangedAt], ["PIN", value.pinChangedAt]].map(([book, at]) => (
         <div key={book} className={at && Date.now() - Date.parse(at) < 15 * 60000 ? "recent" : ""}>
           <small>{book}</small> {at ? fmtWhen(new Date(at)) : "—"}
         </div>

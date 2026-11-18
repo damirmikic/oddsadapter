@@ -59,7 +59,7 @@ export function markKey(sport, v) {
 async function saveMark(body) {
   const before = marks;
   marks = { ...marks };
-  if (body.status) marks[body.key] = { status: body.status, note: body.note || "", merkur: body.merkur, user: "", at: new Date().toISOString() };
+  if (body.status) marks[body.key] = { status: body.status, note: body.note || "", book: body.book, user: "", at: new Date().toISOString() };
   else delete marks[body.key];
   emit();
   try {
@@ -90,7 +90,7 @@ export function MarkCell({ sport, value, match, mark }) {
   const [note, setNote] = useState(mark?.status === "custom" ? mark.note : "");
   const key = markKey(sport, value);
   const save = (status, text = "") =>
-    saveMark({ key, sport, starts: match?.starts, status, note: text, merkur: value.merkur });
+    saveMark({ key, sport, starts: match?.starts, status, note: text, book: value.book });
   const onSelect = (event) => {
     const status = event.target.value;
     if (status === "custom") {
@@ -105,10 +105,10 @@ export function MarkCell({ sport, value, match, mark }) {
     if (text && text !== mark?.note) save("custom", text);
     if (!text && !mark) setCustom(false);
   };
-  const moved = mark && mark.merkur != null && value.merkur != null && Math.abs(mark.merkur - value.merkur) > 1e-9;
+  const moved = mark && mark.book != null && value.book != null && Math.abs(mark.book - value.book) > 1e-9;
   const title = mark
     ? `${markLabel(mark)} · ${new Date(mark.at).toLocaleString("sr-RS")}${mark.user ? ` · ${mark.user}` : ""}` +
-      (mark.merkur != null ? ` · ${short} kvota pri označavanju ${fmt2(mark.merkur)}` : "")
+      (mark.book != null ? ` · ${short} kvota pri označavanju ${fmt2(mark.book)}` : "")
     : "Označi šta je urađeno sa ovim ishodom (vide svi korisnici)";
   return (
     <div className="mark-cell" title={title} onClick={(event) => event.stopPropagation()}>
@@ -122,7 +122,7 @@ export function MarkCell({ sport, value, match, mark }) {
           onChange={(event) => setNote(event.target.value)} onBlur={saveNote}
           onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()} />
       )}
-      {moved && <small className="mark-moved">{short} kvota promenjena ({fmt2(mark.merkur)} → {fmt2(value.merkur)})</small>}
+      {moved && <small className="mark-moved">{short} kvota promenjena ({fmt2(mark.book)} → {fmt2(value.book)})</small>}
     </div>
   );
 }

@@ -1,6 +1,6 @@
-// Football boards: Pinnacle board and the MerkurXtip vs Pinnacle comparison board.
+// Football boards: Pinnacle board and the bookie vs Pinnacle comparison board.
 import { useMemo } from "react";
-import { fmt2, fmtKickoffShort, fmtLimit, fmtLine, fmtOdds, merkurClass, merkurTitle, pinnacleClass, timeFmt } from "../format.js";
+import { fmt2, fmtKickoffShort, fmtLimit, fmtLine, fmtOdds, bookClass, bookTitle, pinnacleClass, timeFmt } from "../format.js";
 import { CompBadge, KickoffWarning, ML_SIDES, Price, useBookie } from "../ui.jsx";
 
 function OpenDelta({ match }) {
@@ -114,12 +114,12 @@ export function BoardTable({ groups, competitions, selectedId, fetchedAt, onSele
   );
 }
 
-function CompareRow({ match, selected, onSelect, onOdds, pinStamp, mxStamp }) {
+function CompareRow({ match, selected, onSelect, onOdds, pinStamp, bookStamp }) {
   const { label, short } = useBookie();
-  const x = match.merkur;
+  const x = match.book;
   // colour only moves from the latest refresh
   const pinPrev = pinStamp && match.changedAt === pinStamp ? match.prev : null;
-  const mxPrev = mxStamp && x?.changedAt === mxStamp ? x.prev : null;
+  const bookPrev = bookStamp && x?.changedAt === bookStamp ? x.prev : null;
   const kickoff = new Date(match.starts);
   const limit = fmtLimit(match.ah?.max || match.ou?.max);
   const oddsClick = (event) => {
@@ -156,11 +156,11 @@ function CompareRow({ match, selected, onSelect, onOdds, pinStamp, mxStamp }) {
         const odds = x?.ml?.[side]?.odds;
         const ev = x?.ml?.[side]?.ev;
         const pin = match.ml?.[side]?.odds;
-        const prev = mxPrev?.[side];
+        const prev = bookPrev?.[side];
         return (
           <td key={`m${side}`} className={`mc-odds mc-click${i === 0 ? " mc-group" : ""}`} onClick={oddsClick}>
             {odds ? (
-              <span className={`mc-cell ${merkurClass(odds, pin, ev, prev)}`} title={merkurTitle(odds, pin, match.ml?.[side]?.fair, ev, prev, short)}>
+              <span className={`mc-cell ${bookClass(odds, pin, ev, prev)}`} title={bookTitle(odds, pin, match.ml?.[side]?.fair, ev, prev, short)}>
                 {fmt2(odds)}
               </span>
             ) : (
@@ -169,23 +169,23 @@ function CompareRow({ match, selected, onSelect, onOdds, pinStamp, mxStamp }) {
           </td>
         );
       })}
-      <GoalCells goals={match.goals} pinStamp={pinStamp} mxStamp={mxStamp} onClick={oddsClick} />
+      <GoalCells goals={match.goals} pinStamp={pinStamp} bookStamp={bookStamp} onClick={oddsClick} />
     </tr>
   );
 }
 
 const OU = [["over", "V"], ["under", "M"]];
 
-function GoalCells({ goals, pinStamp, mxStamp, onClick }) {
+function GoalCells({ goals, pinStamp, bookStamp, onClick }) {
   const { label, short } = useBookie();
   if (!goals) {
     return <td className="mc-line mc-group-strong" colSpan={7}><span className="muted">—</span></td>;
   }
   const pinPrev = pinStamp && goals.pinChangedAt === pinStamp ? goals.pinPrev : null;
-  const mxPrev = mxStamp && goals.mxChangedAt === mxStamp ? goals.mxPrev : null;
+  const bookPrev = bookStamp && goals.bookChangedAt === bookStamp ? goals.bookPrev : null;
   return (
     <>
-      <td className="mc-line mc-group-strong" title={goals.merkur ? "Linija koju imaju obe kuće, najbliža Pinnacle glavnoj" : "Pinnacle glavna linija"}>
+      <td className="mc-line mc-group-strong" title={goals.book ? "Linija koju imaju obe kuće, najbliža Pinnacle glavnoj" : "Pinnacle glavna linija"}>
         {goals.line}
       </td>
       {OU.map(([side], i) => (
@@ -202,14 +202,14 @@ function GoalCells({ goals, pinStamp, mxStamp, onClick }) {
         </td>
       ))}
       {OU.map(([side], i) => {
-        const odds = goals.merkur?.[side];
+        const odds = goals.book?.[side];
         const ev = goals.ev?.[side];
         const pin = goals.pinnacle[side];
-        const prev = mxPrev?.[side];
+        const prev = bookPrev?.[side];
         return (
           <td key={`gm${side}`} className={`mc-odds mc-click${i === 0 ? " mc-group" : ""}`} onClick={onClick}>
             {odds ? (
-              <span className={`mc-cell ${merkurClass(odds, pin, ev, prev)}`} title={merkurTitle(odds, pin, goals.fair[side], ev, prev, short)}>
+              <span className={`mc-cell ${bookClass(odds, pin, ev, prev)}`} title={bookTitle(odds, pin, goals.fair[side], ev, prev, short)}>
                 {fmt2(odds)}
               </span>
             ) : (
@@ -222,7 +222,7 @@ function GoalCells({ goals, pinStamp, mxStamp, onClick }) {
   );
 }
 
-export function CompareTable({ matches, selectedId, onSelect, onOdds, pinStamp, mxStamp }) {
+export function CompareTable({ matches, selectedId, onSelect, onOdds, pinStamp, bookStamp }) {
   const { label } = useBookie();
   return (
     <div className="board-scroll mc-wrap">
@@ -263,7 +263,7 @@ export function CompareTable({ matches, selectedId, onSelect, onOdds, pinStamp, 
               onSelect={onSelect}
               onOdds={onOdds}
               pinStamp={pinStamp}
-              mxStamp={mxStamp}
+              bookStamp={bookStamp}
             />
           ))}
         </tbody>

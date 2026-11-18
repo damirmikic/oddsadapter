@@ -1,5 +1,5 @@
-"""Code shared by every sport: time helpers, delta merging, MerkurXtip line decoding, compare rows, value items and
-the PinnWire snapshot state (fetching, delta merging, the MerkurXtip offer cache).
+"""Code shared by every sport: time helpers, delta merging, the bookie line decoding, compare rows, value items and
+the PinnWire snapshot state (fetching, delta merging, the bookie offer cache).
 
 This module must not import `pinnwire_dashboard` (run as a script that module is `__main__`).
 """
@@ -14,7 +14,7 @@ import unicodedata
 from datetime import datetime, timezone
 
 import bookie_adapter
-import bookie_client as mx
+import bookie_client as bk
 import pinnwire_client as pw
 
 log = logging.getLogger("xtip.snapshot")
@@ -96,13 +96,13 @@ def team_ladders(markets):
 
 
 def param_lines(row, sets, sides, market="totals"):
-    """MerkurXtip lines whose value is a `params` entry: sets of (line param, first side code, second side code)
+    """The bookie lines whose value is a `params` entry: sets of (line param, first side code, second side code)
     -> {line: {side: odds}}, the first set with a line wins."""
     raw, params = row.get("odds") or {}, row.get("params") or {}
     out = {}
     for key, first, second in sets:
-        line = mx._param_line(params, key)
-        prices = mx._pick(raw, dict(zip(sides, (first, second))))
+        line = bk._param_line(params, key)
+        prices = bk._pick(raw, dict(zip(sides, (first, second))))
         if pw.allowed_line(line, market) and prices and line not in out:
             out[line] = prices
     return out
@@ -110,24 +110,24 @@ def param_lines(row, sets, sides, market="totals"):
 
 # ------------------------------------------------------------------------- comparison
 
-def compare_row(group, line, labels, merkur, pinnacle, max_bet=None, derived=False):
-    """One market: MerkurXtip odds against Pinnacle fair odds. ev = MerkurXtip / fair - 1.
+def compare_row(group, line, labels, book, pinnacle, max_bet=None, derived=False):
+    """One market: the bookie odds against Pinnacle fair odds. ev = the bookie / fair - 1.
 
-    `merkur` may hold only some of the sides (a football handicap derived from a European handicap has one);
-    only the sides MerkurXtip prices become outcomes. The MerkurXtip margin needs both sides of a direct price,
+    `book` may hold only some of the sides (a football handicap derived from a European handicap has one);
+    only the sides the bookie prices become outcomes. The bookie margin needs both sides of a direct price,
     so it is None for partial and derived rows.
     """
     fair, pin_margin = pw.fair_odds(pinnacle)
-    outcomes = [{"key": key, "label": label, "merkur": merkur[key], "pinnacle": pinnacle[key],
-                 "fair": round(fair[key], 3), "ev": round(merkur[key] / fair[key] - 1, 4)}
-                for key, label in labels if key in merkur]
+    outcomes = [{"key": key, "label": label, "book": book[key], "pinnacle": pinnacle[key],
+                 "fair": round(fair[key], 3), "ev": round(book[key] / fair[key] - 1, 4)}
+                for key, label in labels if key in book]
     complete = not derived and len(outcomes) == len(labels)
     return {
         "group": group,
         "line": line,
         "outcomes": outcomes,
         "derived": derived,
-        "merkurMargin": round((sum(1 / o for o in merkur.values()) - 1) * 100, 2) if complete else None,
+        "bookMargin": round((sum(1 / o for o in book.values()) - 1) * 100, 2) if complete else None,
         "pinnacleMargin": pin_margin,
         "maxBet": max_bet,
         "maxEv": max(o["ev"] for o in outcomes),
@@ -136,7 +136,7 @@ def compare_row(group, line, labels, merkur, pinnacle, max_bet=None, derived=Fal
 
 def market_label(group, line):
     if group == "Hendikep" and line == 0:
-        return "X vraća ulog"  # AH 0 = MerkurXtip draw no bet
+        return "X vraća ulog"  # AH 0 = the bookie draw no bet
     return group + ("" if line is None else f" {line:g}")
 
 
@@ -151,20 +151,20 @@ def best_edge(period_rows, prefixes):
 
 
 def value_items(match_id, period_rows, period_labels, label=None, stale=None):
-    """Every outcome where the MerkurXtip price beats the Pinnacle price, over [(period key, compare row)], with
+    """Every outcome where the bookie price beats the Pinnacle price, over [(period key, compare row)], with
     pw.best_per_line_market() applied. `label(row, outcome)` renames an outcome, `stale(period, row, outcome)` is
-    the MerkurXtip main line gap that favours it (basketball)."""
+    the bookie main line gap that favours it (basketball)."""
     items = []
     for period, r in period_rows:
         for o in r["outcomes"]:
-            if o["merkur"] <= o["pinnacle"]:
+            if o["book"] <= o["pinnacle"]:
                 continue
             items.append({
                 "matchId": match_id, "period": period, "periodLabel": period_labels[period], "group": r["group"],
                 "line": r["line"], "key": o["key"], "label": label(r, o) if label else o["label"],
-                "merkur": o["merkur"], "pinnacle": o["pinnacle"], "fair": o["fair"], "ev": o["ev"],
-                "overPinnacle": round(o["merkur"] / o["pinnacle"] - 1, 4),
-                "merkurMargin": r["merkurMargin"], "pinnacleMargin": r["pinnacleMargin"],
+                "book": o["book"], "pinnacle": o["pinnacle"], "fair": o["fair"], "ev": o["ev"],
+                "overPinnacle": round(o["book"] / o["pinnacle"] - 1, 4),
+                "bookMargin": r["bookMargin"], "pinnacleMargin": r["pinnacleMargin"],
                 "derived": bool(r.get("derived")), "modeled": bool(r.get("modeled")),
                 "stale": stale(period, r, o) if stale else None,
             })
@@ -173,8 +173,8 @@ def value_items(match_id, period_rows, period_labels, label=None, stale=None):
 
 # ------------------------------------------------------------------------- leagues outside the tracked ones
 
-# Matches of leagues a sport does not track: they are paired against the whole MerkurXtip offer, so the "missing"
-# view can show what MerkurXtip does not sell. Without a competition check only names and kickoff pair a match,
+# Matches of leagues a sport does not track: they are paired against the whole bookie offer, so the "missing"
+# view can show what the bookie does not sell. Without a competition check only names and kickoff pair a match,
 # hence the stricter rules.
 OTHER_WINDOW = 3 * 60
 OTHER_MIN_SCORE = 0.75
@@ -207,8 +207,8 @@ def with_league_markers(home, away, league):
     )
 
 
-def other_score(pinnacle, merkur):
-    return 0.0 if side_markers(pinnacle) != side_markers(merkur) else mx.name_score(pinnacle, merkur)
+def other_score(pinnacle, book):
+    return 0.0 if side_markers(pinnacle) != side_markers(book) else bk.name_score(pinnacle, book)
 
 
 def split_league(name):
@@ -230,59 +230,59 @@ def other_competitions(matches):
 
 
 def offered_other(events, rows):
-    """Untracked leagues whose matches MerkurXtip offers, for adding them: PinnWire league, the MerkurXtip league
+    """Untracked leagues whose matches the bookie offers, for adding them: PinnWire league, the bookie league
     its matches pair with and how many matches."""
     league = {str(e["event_id"]): e for e in events}
     out = {}
     for pid, row in rows.items():
         e = league[pid]
         entry = out.setdefault(e["league_id"], {"leagueId": e["league_id"], "leagueName": e.get("league_name") or "",
-                                                "mxLeagueId": row.get("leagueId"), "mxLeague": row.get("leagueShort") or "",
+                                                "bookLeagueId": row.get("leagueId"), "bookLeague": row.get("leagueShort") or "",
                                                 "count": 0})
         entry["count"] += 1
     return sorted(out.values(), key=lambda x: (-x["count"], x["leagueName"]))
 
 
-def unpaired_other(events, offer, used, merkur_ts=lambda r: r.get("kickOffTime") or 0, is_prematch=mx.is_prematch):
-    """({pinnacle id} unpaired, {pinnacle id: hint}, {pinnacle id: MerkurXtip row} paired) of untracked events;
-    `used` are MerkurXtip ids already paired within the tracked competitions."""
+def unpaired_other(events, offer, used, book_ts=lambda r: r.get("kickOffTime") or 0, is_prematch=bk.is_prematch):
+    """({pinnacle id} unpaired, {pinnacle id: hint}, {pinnacle id: the bookie row} paired) of untracked events;
+    `used` are the bookie ids already paired within the tracked competitions."""
     pin = [{"id": str(e["event_id"]), "comp": "*", "home": e.get("home", ""), "away": e.get("away", ""),
             "ts": event_ts(e)} for e in events]
     mer = [{"id": r["id"], "comp": "*", "home": r.get("home", ""), "away": r.get("away", ""),
-            "ts": merkur_ts(r), "row": r} for r in offer if r["id"] not in used and is_prematch(r)]
-    # both team orders: MerkurXtip sometimes lists a game the other way round than Pinnacle
+            "ts": book_ts(r), "row": r} for r in offer if r["id"] not in used and is_prematch(r)]
+    # both team orders: the bookie sometimes lists a game the other way round than Pinnacle
     both_orders = mer + [{**m, "home": m["away"], "away": m["home"]} for m in mer]
-    paired = mx.pair(pin, both_orders, OTHER_WINDOW, OTHER_MIN_SCORE, other_score)
-    hints = mx.hints(pin, mer, paired, OTHER_WINDOW, other_score)
+    paired = bk.pair(pin, both_orders, OTHER_WINDOW, OTHER_MIN_SCORE, other_score)
+    hints = bk.hints(pin, mer, paired, OTHER_WINDOW, other_score)
     return {p["id"] for p in pin} - paired.keys(), hints, {pid: m["row"] for pid, (m, _) in paired.items()}
 
 
 # ------------------------------------------------------------------------- state
 
 class SnapshotState:
-    """One sport's PinnWire snapshot (full load, then `since=` deltas merged in) and its MerkurXtip offer cache.
+    """One sport's PinnWire snapshot (full load, then `since=` deltas merged in) and its bookie offer cache.
 
     Subclasses set `sport_id` / `offer_path` and may override the hooks `incoming` (events of a response worth
     keeping), `merge` (delta merge) and `merged` (runs under the lock after a fetch, returns the changed count).
     """
 
     sport_id = pw.SOCCER
-    offer_path = mx.OFFER_PATH
+    offer_path = bk.OFFER_PATH
     clv_name = "football"
     alt_units = False  # ask PinnWire for the side-market events too
     label = "?"  # sport name in the log, set from SPORT_STATES
 
-    def __init__(self, history, key_fn, merkur=None, bookie=None):
+    def __init__(self, history, key_fn, book=None, bookie=None):
         self.history = history  # shared by every sport: opening prices (football) and the request counter
         self.key_fn = key_fn
         self.lock = threading.Lock()
         self.fetch_lock = threading.Lock()
         self.bookie = bookie or bookie_adapter.MaxBetAdapter()
-        self._custom_merkur = merkur is not None
-        self.merkur = merkur or mx.OfferCache(self.bookie.sport_api(self.clv_name))
-        self.merkur_lock = threading.Lock()
-        self.pairs = {}  # pinnacle event id -> (merkur offer row, name score)
-        self.quotes = {}  # PinnWire event id -> (board match id, MerkurXtip prices by drop_key), from the last board
+        self._custom_book = book is not None
+        self.book = book or bk.OfferCache(self.bookie.sport_api(self.clv_name))
+        self.book_lock = threading.Lock()
+        self.pairs = {}  # pinnacle event id -> (book offer row, name score)
+        self.quotes = {}  # PinnWire event id -> (board match id, the bookie prices by drop_key), from the last board
         self.clv = None  # ClvStore that records value signals and closing lines at every board
         self.prices = None  # PriceStore that records every compared price change at every board
         self.api = None
@@ -415,10 +415,10 @@ class SnapshotState:
 
     def set_bookie(self, bookie):
         """Switch the active bookie adapter and clear cached pairing state."""
-        with self.merkur_lock:
+        with self.book_lock:
             self.bookie = bookie
-            if not self._custom_merkur:
-                self.merkur = mx.OfferCache(bookie.sport_api(self.clv_name))
+            if not self._custom_book:
+                self.book = bk.OfferCache(bookie.sport_api(self.clv_name))
             self.pairs = {}
             self.quotes = {}
             self.other_cache = None
@@ -429,11 +429,11 @@ class SnapshotState:
     def decode_markets(self, row, period=None):
         return self.bookie.decode_markets(self.clv_name, row, period)
 
-    def merkur_offer(self, refresh=False):
-        with self.merkur_lock:
-            before = self.merkur.error
-            offer = self.merkur.get(refresh=refresh, stamp_fn=utc_stamp)
-            after = self.merkur.error
+    def book_offer(self, refresh=False):
+        with self.book_lock:
+            before = self.book.error
+            offer = self.book.get(refresh=refresh, stamp_fn=utc_stamp)
+            after = self.book.error
         if after and after != before:
             log.warning("%s: %s: %s", self.label, self.bookie.label, after)
         elif before and not after:

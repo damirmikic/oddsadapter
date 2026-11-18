@@ -1,11 +1,11 @@
-"""Ice hockey board: Pinnacle (PinnWire sport 4) against the MerkurXtip hockey offer (feed letter "H").
+"""Ice hockey board: Pinnacle (PinnWire sport 4) against the bookie hockey offer (feed letter "H").
 
 PinnWire numbers hockey periods 0 = the whole game with overtime and shootout (two-way winner), 6 = regulation
 time (60 minutes: three-way winner, handicap, totals, team totals) and 1, 2, 3 = the thirds (two-way winner that
-refunds a drawn third, handicap, totals). MerkurXtip sells the winner with overtime ("P1" / "P2"), the 60-minute
+refunds a drawn third, handicap, totals). The bookie sells the winner with overtime ("P1" / "P2"), the 60-minute
 1X2, handicap and totals, and the same markets per third. Lines are matched exactly; only half-point lines are
 used. The level handicap (AH 0) is left out on purpose, unlike football: Pinnacle's two-way hockey price is the
-moneyline with overtime, compared with MerkurXtip's winner with overtime and shootout, so MerkurXtip's "X vraća
+moneyline with overtime, compared with the bookie's winner with overtime and shootout, so the bookie's "X vraća
 ulog" has no Pinnacle counterpart. No model, like tennis. Everything else (state, delta merging, board shape) is
 shared with basketball.
 """
@@ -13,66 +13,66 @@ from __future__ import annotations
 
 import basketball as bb
 import common
-import bookie_client as mx
+import bookie_client as bk
 import pinnwire_client as pw
 
 SPORT_ID = 4
 OFFER_PATH = "/restapi/custom/offer/sr/sport/H/mob"
 REGULATION = 6  # PinnWire period number of the 60 minutes
 
-# PinnWire league_id -> display info; `mx_id` is the MerkurXtip leagueId of the same competition.
+# PinnWire league_id -> display info; `book_id` is the bookie leagueId of the same competition.
 COMPETITIONS = [
-    {"id": 1456, "key": "nhl", "name": "NHL", "country": "SAD", "code": "NHL", "mx_id": 2314881},
-    {"id": 1264, "key": "ahl", "name": "AHL", "country": "SAD", "code": "AHL", "mx_id": 2315898},
-    {"id": 1295, "key": "qmjhl", "name": "QMJHL", "country": "Kanada", "code": "QMJ", "mx_id": 2342477},
-    {"id": 206704, "key": "whl", "name": "WHL", "country": "Kanada", "code": "WHL", "mx_id": 2341400},
-    {"id": 1484, "key": "khl", "name": "KHL", "country": "Rusija", "code": "KHL", "mx_id": 2313732},
-    {"id": 5154, "key": "vhl", "name": "VHL", "country": "Rusija", "code": "VHL", "mx_id": 2313832},
-    {"id": 149037, "key": "mhl", "name": "MHL", "country": "Rusija", "code": "MHL", "mx_id": 2313805},
-    {"id": 1512, "key": "allsv", "name": "Allsvenskan", "country": "Švedska", "code": "ALL", "mx_id": 2313893},
-    {"id": 217161, "key": "ettan", "name": "HockeyEttan", "country": "Švedska", "code": "ETT", "mx_id": 2313834},
-    {"id": 223040, "key": "sdhl", "name": "SDHL (Ž)", "country": "Švedska", "code": "SDHL", "mx_id": 2341149},
-    {"id": 1401, "key": "liiga", "name": "Liiga", "country": "Finska", "code": "LII", "mx_id": 2375725},
-    {"id": 4529, "key": "mestis", "name": "Mestis", "country": "Finska", "code": "MES", "mx_id": 2316051},
-    {"id": 1379, "key": "u20fin", "name": "Suomi-sarja U20", "country": "Finska", "code": "U20", "mx_id": 2390554},
-    {"id": 1419, "key": "del", "name": "DEL", "country": "Nemačka", "code": "DEL", "mx_id": 2314454},
-    {"id": 149036, "key": "del2", "name": "DEL 2", "country": "Nemačka", "code": "DL2", "mx_id": 2313836},
-    {"id": 1532, "key": "nla", "name": "National League", "country": "Švajcarska", "code": "NL", "mx_id": 2313897},
-    {"id": 1297, "key": "czeext", "name": "Extraliga", "country": "Češka", "code": "CZE", "mx_id": 2313810},
-    {"id": 1498, "key": "sloext", "name": "Extraliga", "country": "Slovačka", "code": "SVK", "mx_id": 2313797},
-    {"id": 1497, "key": "slo1", "name": "1. liga", "country": "Slovačka", "code": "SV1", "mx_id": 2314032},
-    {"id": 1282, "key": "bely", "name": "Extraliga", "country": "Belorusija", "code": "BLR", "mx_id": 2313833},
-    {"id": 1275, "key": "ihl", "name": "Ice Hockey League", "country": "Austrija", "code": "AUT", "mx_id": 2329773},
-    {"id": 1413, "key": "magnus", "name": "Ligue Magnus", "country": "Francuska", "code": "FRA", "mx_id": 2314123},
-    {"id": 1477, "key": "phl", "name": "PHL", "country": "Poljska", "code": "POL", "mx_id": 2390652},
-    {"id": 1316, "key": "metal", "name": "Metal Ligaen", "country": "Danska", "code": "DEN", "mx_id": 2313738},
-    {"id": 216131, "key": "alps", "name": "Alps Hockey League", "country": "Evropa", "code": "AHL2", "mx_id": 2394103},
-    {"id": 211710, "key": "erste", "name": "Erste Liga", "country": "Evropa", "code": "ERS", "mx_id": 2313835},
-    {"id": 206706, "key": "elite", "name": "Elite League", "country": "Velika Britanija", "code": "UK", "mx_id": 2317614},
-    {"id": 1597, "key": "asia", "name": "Asia League", "country": "Azija", "code": "ASIA", "mx_id": 2387174},
-    {"id": 1293, "key": "ohl", "name": "OHL", "country": "Kanada", "code": "OHL", "mx_id": 2325713},
-    {"id": 280513, "key": "cze2l", "name": "2. liga", "country": "Češka", "code": "CZE2", "mx_id": 2388950},
-    {"id": 206705, "key": "cze1l", "name": "1. liga", "country": "Češka", "code": "CZE1", "mx_id": 2313807},
+    {"id": 1456, "key": "nhl", "name": "NHL", "country": "SAD", "code": "NHL", "book_id": 2314881},
+    {"id": 1264, "key": "ahl", "name": "AHL", "country": "SAD", "code": "AHL", "book_id": 2315898},
+    {"id": 1295, "key": "qmjhl", "name": "QMJHL", "country": "Kanada", "code": "QMJ", "book_id": 2342477},
+    {"id": 206704, "key": "whl", "name": "WHL", "country": "Kanada", "code": "WHL", "book_id": 2341400},
+    {"id": 1484, "key": "khl", "name": "KHL", "country": "Rusija", "code": "KHL", "book_id": 2313732},
+    {"id": 5154, "key": "vhl", "name": "VHL", "country": "Rusija", "code": "VHL", "book_id": 2313832},
+    {"id": 149037, "key": "mhl", "name": "MHL", "country": "Rusija", "code": "MHL", "book_id": 2313805},
+    {"id": 1512, "key": "allsv", "name": "Allsvenskan", "country": "Švedska", "code": "ALL", "book_id": 2313893},
+    {"id": 217161, "key": "ettan", "name": "HockeyEttan", "country": "Švedska", "code": "ETT", "book_id": 2313834},
+    {"id": 223040, "key": "sdhl", "name": "SDHL (Ž)", "country": "Švedska", "code": "SDHL", "book_id": 2341149},
+    {"id": 1401, "key": "liiga", "name": "Liiga", "country": "Finska", "code": "LII", "book_id": 2375725},
+    {"id": 4529, "key": "mestis", "name": "Mestis", "country": "Finska", "code": "MES", "book_id": 2316051},
+    {"id": 1379, "key": "u20fin", "name": "Suomi-sarja U20", "country": "Finska", "code": "U20", "book_id": 2390554},
+    {"id": 1419, "key": "del", "name": "DEL", "country": "Nemačka", "code": "DEL", "book_id": 2314454},
+    {"id": 149036, "key": "del2", "name": "DEL 2", "country": "Nemačka", "code": "DL2", "book_id": 2313836},
+    {"id": 1532, "key": "nla", "name": "National League", "country": "Švajcarska", "code": "NL", "book_id": 2313897},
+    {"id": 1297, "key": "czeext", "name": "Extraliga", "country": "Češka", "code": "CZE", "book_id": 2313810},
+    {"id": 1498, "key": "sloext", "name": "Extraliga", "country": "Slovačka", "code": "SVK", "book_id": 2313797},
+    {"id": 1497, "key": "slo1", "name": "1. liga", "country": "Slovačka", "code": "SV1", "book_id": 2314032},
+    {"id": 1282, "key": "bely", "name": "Extraliga", "country": "Belorusija", "code": "BLR", "book_id": 2313833},
+    {"id": 1275, "key": "ihl", "name": "Ice Hockey League", "country": "Austrija", "code": "AUT", "book_id": 2329773},
+    {"id": 1413, "key": "magnus", "name": "Ligue Magnus", "country": "Francuska", "code": "FRA", "book_id": 2314123},
+    {"id": 1477, "key": "phl", "name": "PHL", "country": "Poljska", "code": "POL", "book_id": 2390652},
+    {"id": 1316, "key": "metal", "name": "Metal Ligaen", "country": "Danska", "code": "DEN", "book_id": 2313738},
+    {"id": 216131, "key": "alps", "name": "Alps Hockey League", "country": "Evropa", "code": "AHL2", "book_id": 2394103},
+    {"id": 211710, "key": "erste", "name": "Erste Liga", "country": "Evropa", "code": "ERS", "book_id": 2313835},
+    {"id": 206706, "key": "elite", "name": "Elite League", "country": "Velika Britanija", "code": "UK", "book_id": 2317614},
+    {"id": 1597, "key": "asia", "name": "Asia League", "country": "Azija", "code": "ASIA", "book_id": 2387174},
+    {"id": 1293, "key": "ohl", "name": "OHL", "country": "Kanada", "code": "OHL", "book_id": 2325713},
+    {"id": 280513, "key": "cze2l", "name": "2. liga", "country": "Češka", "code": "CZE2", "book_id": 2388950},
+    {"id": 206705, "key": "cze1l", "name": "1. liga", "country": "Češka", "code": "CZE1", "book_id": 2313807},
     {"id": 280900, "key": "ecn", "name": "European Cup of Nations", "country": "Evropa", "code": "ECN",
-     "mx_id": 2391444},
-    {"id": 4605, "key": "eht", "name": "Euro Hockey Tour", "country": "Evropa", "code": "EHT", "mx_id": 2328104},
-    {"id": 4828, "key": "wcw", "name": "Svetsko prvenstvo (Ž)", "country": "Svet", "code": "WCW", "mx_id": 2323564},
-    {"id": 1325, "key": "chl", "name": "Champions Hockey League", "country": "Evropa", "code": "CHL", "mx_id": 2323761},
-    {"id": 1517, "key": "shl", "name": "SHL", "country": "Švedska", "code": "SHL", "mx_id": 2313733},
-    {"id": 206707, "key": "swissl", "name": "Swiss League", "country": "Švajcarska", "code": "SUI2", "mx_id": 2314025},
-    {"id": 1446, "key": "latl", "name": "Latvian Hockey League", "country": "Letonija", "code": "LAT", "mx_id": 2314027},
-    {"id": 222893, "key": "norehl", "name": "Eliteserien", "country": "Norveška", "code": "NOR", "mx_id": 2387459},
-    {"id": 217164, "key": "nor1dh", "name": "1. divisjon", "country": "Norveška", "code": "NOR2", "mx_id": 2314176},
-    {"id": 1604, "key": "intfrw", "name": "Prijateljske utakmice (Ž)", "country": "Svet", "code": "FRW", "mx_id": 2326954},
+     "book_id": 2391444},
+    {"id": 4605, "key": "eht", "name": "Euro Hockey Tour", "country": "Evropa", "code": "EHT", "book_id": 2328104},
+    {"id": 4828, "key": "wcw", "name": "Svetsko prvenstvo (Ž)", "country": "Svet", "code": "WCW", "book_id": 2323564},
+    {"id": 1325, "key": "chl", "name": "Champions Hockey League", "country": "Evropa", "code": "CHL", "book_id": 2323761},
+    {"id": 1517, "key": "shl", "name": "SHL", "country": "Švedska", "code": "SHL", "book_id": 2313733},
+    {"id": 206707, "key": "swissl", "name": "Swiss League", "country": "Švajcarska", "code": "SUI2", "book_id": 2314025},
+    {"id": 1446, "key": "latl", "name": "Latvian Hockey League", "country": "Letonija", "code": "LAT", "book_id": 2314027},
+    {"id": 222893, "key": "norehl", "name": "Eliteserien", "country": "Norveška", "code": "NOR", "book_id": 2387459},
+    {"id": 217164, "key": "nor1dh", "name": "1. divisjon", "country": "Norveška", "code": "NOR2", "book_id": 2314176},
+    {"id": 1604, "key": "intfrw", "name": "Prijateljske utakmice (Ž)", "country": "Svet", "code": "FRW", "book_id": 2326954},
 ]
-MX_COMP = {c["mx_id"]: c["id"] for c in COMPETITIONS}
+BOOK_COMP = {c["book_id"]: c["id"] for c in COMPETITIONS}
 
 # (key, label, PinnWire period number or None for the whole game)
 PERIODS = [("ft", "Ceo meč", None), ("p1", "1. period", 1), ("p2", "2. period", 2), ("p3", "3. period", 3)]
 NUMBERS = {"ft": 0, "p1": 1, "p2": 2, "p3": 3}
 
 # Each set is (line param, home/over code, away/under code); the param holds the home-side line.
-MX_PERIOD = {
+BOOK_PERIOD = {
     "ft": {
         "ml": ("50816", "50817"),  # winner with overtime and shootout
         "x12": ("1", "2", "3"),
@@ -100,7 +100,7 @@ MX_PERIOD = {
 }
 
 GROUPS = [
-    # key in pinnacle_markets()/merkur_markets(), group label, outcome sides
+    # key in pinnacle_markets()/book_markets(), group label, outcome sides
     ("ml", "Pobednik", (("home", "1"), ("away", "2"))),
     ("x12", "1X2", (("home", "1"), ("draw", "X"), ("away", "2"))),
     ("spreads", "Hendikep", (("home", "1"), ("away", "2"))),
@@ -137,7 +137,7 @@ def full_limit(lines, key):
 
 
 def pinnacle_markets(event, period="ft"):
-    """Pinnacle prices of one period keyed like merkur_markets(): ml {side: odds}, lines {line: {side: odds}}.
+    """Pinnacle prices of one period keyed like book_markets(): ml {side: odds}, lines {line: {side: odds}}.
 
     Spreads use the default ladder rule (half-point lines only), which drops the AH 0 PinnWire still quotes.
     """
@@ -166,13 +166,13 @@ def pinnacle_limits(event, period="ft"):
 
 
 @bb.reversible
-def merkur_markets(row, period="ft"):
-    """One MerkurXtip hockey offer row -> the same shape as pinnacle_markets(), for one period."""
+def book_markets(row, period="ft"):
+    """One bookie hockey offer row -> the same shape as pinnacle_markets(), for one period."""
     raw = row.get("odds") or {}
-    codes = MX_PERIOD[period]
-    out = {"ml": mx._pick(raw, dict(zip(("home", "away"), codes["ml"]))), **EMPTY}
+    codes = BOOK_PERIOD[period]
+    out = {"ml": bk._pick(raw, dict(zip(("home", "away"), codes["ml"]))), **EMPTY}
     if "x12" in codes:
-        out["x12"] = mx._pick(raw, dict(zip(("home", "draw", "away"), codes["x12"])))
+        out["x12"] = bk._pick(raw, dict(zip(("home", "draw", "away"), codes["x12"])))
     out["spreads"] = common.param_lines(row, codes["spreads"], ("home", "away"))
     out["totals"] = common.param_lines(row, codes["totals"], ("over", "under"))
     for side in ("home", "away"):
@@ -182,17 +182,17 @@ def merkur_markets(row, period="ft"):
 
 # ------------------------------------------------------------------------- comparison
 
-def compare(pin, merkur, period="ft", limits=None):
+def compare(pin, book, period="ft", limits=None):
     """Every market both books price at the same line, as compare rows."""
     rows = []
     for key, group, labels in GROUPS:
         if key in ("ml", "x12"):
-            if pin[key] and merkur[key]:
-                rows.append(common.compare_row(group, None, labels, merkur[key], pin[key]))
+            if pin[key] and book[key]:
+                rows.append(common.compare_row(group, None, labels, book[key], pin[key]))
             continue
-        for line in sorted(merkur[key]):
+        for line in sorted(book[key]):
             if line in pin[key]:
-                rows.append(common.compare_row(group, line, labels, merkur[key][line], pin[key][line],
+                rows.append(common.compare_row(group, line, labels, book[key][line], pin[key][line],
                                            (limits or {}).get(key, {}).get(line)))
     for r in rows:
         r["period"] = period
@@ -205,8 +205,8 @@ PREFIXES = {"ft": "", "p1": "1.per ", "p2": "2.per ", "p3": "3.per "}
 
 # ------------------------------------------------------------------------- pairing
 
-# MerkurXtip team name (normalised) -> the PinnWire name of the same team, for names the token rules cannot pair.
-# Kept here and not in merkur_client.ALIASES: these short forms ("zurich") would also rewrite football names.
+# The bookie team name (normalised) -> the PinnWire name of the same team, for names the token rules cannot pair.
+# Kept here and not in bookie_client.ALIASES: these short forms ("zurich") would also rewrite football names.
 ALIASES = {
     "iisalmen": "ipk", "kiekko pojat": "jokp",
     "dinamo sp u20": "jhc dinamo st petersburg", "almaz u20": "almaz cherepovets",
@@ -216,18 +216,18 @@ ALIASES = {
 }
 
 
-def name_score(pinnacle, merkur):
-    if common.side_markers(pinnacle) != common.side_markers(merkur):
+def name_score(pinnacle, book):
+    if common.side_markers(pinnacle) != common.side_markers(book):
         return 0.0
-    return mx.name_score(pinnacle, ALIASES.get(" ".join(mx.norm_tokens(merkur)), merkur))
+    return bk.name_score(pinnacle, ALIASES.get(" ".join(bk.norm_tokens(book)), book))
 
 
 def pair_events(events, offer):
-    return bb.pair_events(events, offer, MX_COMP, name_score)
+    return bb.pair_events(events, offer, BOOK_COMP, name_score)
 
 
-def shape_match(event, hit, decode=merkur_markets):
-    """Board entry of one Pinnacle event, plus its value items from the paired MerkurXtip row."""
+def shape_match(event, hit, decode=book_markets):
+    """Board entry of one Pinnacle event, plus its value items from the paired bookie row."""
     pin = pinnacle_markets(event)
     rows, periods = [], {}
     if hit:
@@ -263,7 +263,7 @@ class HockeyState(bb.BasketballState):
     sport_id = SPORT_ID
     offer_path = OFFER_PATH
     competition_list = COMPETITIONS
-    mx_comp = MX_COMP
+    book_comp = BOOK_COMP
     league_ids = frozenset(c["id"] for c in COMPETITIONS)
     score_fn = staticmethod(name_score)
 

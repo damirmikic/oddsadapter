@@ -52,16 +52,16 @@ export function fmtLine(line, signed) {
   return line > 0 ? `+${line}` : `−${Math.abs(line)}`;
 }
 
-// Handicap/total line label; AH 0 is MerkurXtip "X vraća ulog" (draw no bet).
+// Handicap/total line label; AH 0 is the bookie "X vraća ulog" (draw no bet).
 export function marketLine(group, line) {
   if (line == null) return "";
   if (group === "Hendikep" && line === 0) return "0 · X vraća ulog";
   return fmtLine(line, group.startsWith("Hendikep"));
 }
 
-export function fmtMargins(mx, pin) {
+export function fmtMargins(book, pin) {
   const fmt = (value) => (value != null ? `${value.toFixed(1)}%` : "—");
-  return `${fmt(mx)} / ${fmt(pin)}`;
+  return `${fmt(book)} / ${fmt(pin)}`;
 }
 
 export function fmtPct(value, digits = 1) {
@@ -73,7 +73,7 @@ export function movement(current, previous) {
   return current > previous ? "up" : "down";
 }
 
-// ev = MerkurXtip odds / Pinnacle fair odds - 1; above zero the Merkur price beats the fair price.
+// ev = the bookie odds / Pinnacle fair odds - 1; above zero the bookie price beats the fair price.
 export function fmtEv(ev) {
   if (ev == null) return "—";
   const pct = ev * 100;
@@ -109,16 +109,16 @@ export function pinnacleClass(odds, prev) {
   return move === "up" ? "pin-up" : move === "down" ? "pin-down" : "";
 }
 
-// MerkurXtip cell: red = at/above Pinnacle fair, amber = above the Pinnacle price, purple = MX price changed.
-export function merkurClass(odds, pinnacle, ev, prev) {
+// The bookie cell: red = at/above Pinnacle fair, amber = above the Pinnacle price, purple = MX price changed.
+export function bookClass(odds, pinnacle, ev, prev) {
   const classes = [];
-  if (ev != null && ev >= 0) classes.push("mx-fair");
-  else if (odds && pinnacle && odds > pinnacle) classes.push("mx-above");
-  if (prev && odds && prev !== odds) classes.push("mx-moved");
+  if (ev != null && ev >= 0) classes.push("book-fair");
+  else if (odds && pinnacle && odds > pinnacle) classes.push("book-above");
+  if (prev && odds && prev !== odds) classes.push("book-moved");
   return classes.join(" ");
 }
 
-export function merkurTitle(odds, pinnacle, fair, ev, prev, short = "BK") {
+export function bookTitle(odds, pinnacle, fair, ev, prev, short = "BK") {
   return [
     `Pinnacle ${fmtOdds(pinnacle)}`,
     `fer ${fmtOdds(fair)}`,

@@ -21,7 +21,7 @@ import clv
 import common
 import handball
 import hockey
-import bookie_client as mx
+import bookie_client as bk
 import mma
 import pinnwire_client as pw
 import pinnwire_dashboard as dash
@@ -84,14 +84,14 @@ class FakeAPI:
 KICKOFF_MS = 1914175800000  # 2030-08-28T19:30:00Z
 
 
-def merkur_row(match_id=900, home="Alaves", away="Villarreal", league="ENG PL", ts=KICKOFF_MS, **odds):
+def book_row(match_id=900, home="Alaves", away="Villarreal", league="ENG PL", ts=KICKOFF_MS, **odds):
     base = {"1": 2.50, "2": 3.20, "3": 2.80, "24": 1.85, "22": 1.90, "53877": 1.70, "53878": 2.05}
     base.update(odds)
     return {"id": match_id, "matchCode": 1234, "home": home, "away": away, "kickOffTime": ts,
             "leagueShort": league, "live": False, "odds": base, "params": {"hd2w": "-0.5"}}
 
 
-class FakeMerkurAPI:
+class FakeBookAPI:
     def __init__(self, rows=None):
         self.rows = rows or []
         self.offer_calls = 0
@@ -104,9 +104,9 @@ class FakeMerkurAPI:
         return next(r for r in self.rows if r["id"] == match_id)
 
 
-def make_state(api, merkur_rows=None):
-    merkur = mx.OfferCache(api=FakeMerkurAPI(merkur_rows))
-    state = dash.DashboardState(dash.History(path=None), merkur=merkur)
+def make_state(api, book_rows=None):
+    book = bk.OfferCache(api=FakeBookAPI(book_rows))
+    state = dash.DashboardState(dash.History(path=None), book=book)
     state.get_api = lambda: api
     return state
 
@@ -177,7 +177,7 @@ class BoardTests(unittest.TestCase):
 
 
 class ReversedPairTests(unittest.TestCase):
-    """MerkurXtip lists some games (US college) with the teams the other way round than Pinnacle."""
+    """The bookie lists some games (US college) with the teams the other way round than Pinnacle."""
 
     def test_swap_sides_turns_prices_to_pinnacle_order(self):
         out = bb.swap_sides({"ml": {"home": 4.4, "away": 1.17}, "spreads": {-10.5: {"home": 1.82, "away": 1.9}},
@@ -297,12 +297,12 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(api._mask("bad secret-key here"), "bad *** here")
 
 
-class MerkurDecodeTests(unittest.TestCase):
+class BookDecodeTests(unittest.TestCase):
     def test_ranges_become_totals_and_params_give_lines(self):
-        row = merkur_row(**{"21": 3.6, "242": 1.25, "4": 3.1, "5": 2.1, "6": 3.5, "238": 1.3, "239": 3.4})
+        row = book_row(**{"21": 3.6, "242": 1.25, "4": 3.1, "5": 2.1, "6": 3.5, "238": 1.3, "239": 3.4})
         row["params"].update(overUnder="2.75")
         row["odds"].update({"227": 2.0, "228": 1.8})
-        decoded = mx.markets(row)
+        decoded = bk.markets(row)
 
         self.assertEqual(decoded[0]["ml"], {"home": 2.5, "draw": 3.2, "away": 2.8})
         self.assertEqual(decoded[0]["totals"][2.5], {"over": 1.85, "under": 1.90})
@@ -313,8 +313,8 @@ class MerkurDecodeTests(unittest.TestCase):
         self.assertEqual(decoded[1]["ml"], {"home": 3.1, "draw": 2.1, "away": 3.5})
 
     def test_half_goal_handicaps_from_1x2_and_double_chance(self):
-        row = merkur_row(**{"7": 1.57, "9": 1.55, "4": 2.72, "399": 1.40, "397": 1.50, "6": 2.68})
-        decoded = mx.markets(row)
+        row = book_row(**{"7": 1.57, "9": 1.55, "4": 2.72, "399": 1.40, "397": 1.50, "6": 2.68})
+        decoded = bk.markets(row)
         ft, ht = decoded[0], decoded[1]
 
         # AH -0.5: "1" against "X2";  AH +0.5: "1X" against "2"
@@ -328,41 +328,41 @@ class MerkurDecodeTests(unittest.TestCase):
 
     def test_derived_handicap_needs_both_prices(self):
         # AH +0.5 is "1X" (7) against "2" (3): with both priced it is a pair ...
-        decoded = mx.markets(merkur_row(**{"7": 1.57}))
+        decoded = bk.markets(book_row(**{"7": 1.57}))
         self.assertEqual(decoded[0]["spreads"][0.5], {"home": 1.57, "away": 2.80})
         # ... and without the "2" price the line is dropped instead of being half-filled
-        decoded = mx.markets(merkur_row(**{"7": 1.57, "3": None}))
+        decoded = bk.markets(book_row(**{"7": 1.57, "3": None}))
         self.assertNotIn(0.5, decoded[0]["spreads"])
 
     def test_european_handicap_gives_one_side_of_two_asian_lines(self):
         # h = -1: H1 = home by 2+ = AH -1.5 home; H2 = X2 = AH -0.5 away (away +0.5)
-        row = merkur_row(**{"201": 2.27, "203": 2.43})
+        row = book_row(**{"201": 2.27, "203": 2.43})
         row["params"].update(hd2="-1")
-        spreads = mx.markets(row)[0]["spreads"]
+        spreads = bk.markets(row)[0]["spreads"]
         self.assertEqual(spreads[-1.5], {"home": 2.27})
         self.assertEqual(spreads[-0.5]["away"], 2.05)   # direct hd2w price is kept, not the derived 2.43
 
     def test_european_handicap_lines_for_each_sign(self):
-        row = merkur_row(**{"421": 4.0, "423": 1.5, "424": 1.25, "426": 6.7})
+        row = book_row(**{"421": 4.0, "423": 1.5, "424": 1.25, "426": 6.7})
         row["params"].update(hd2w="-5.5", handicap2="-2", handicap3="1")
-        spreads = mx.markets(row)[0]["spreads"]
+        spreads = bk.markets(row)[0]["spreads"]
         self.assertEqual(spreads[-2.5], {"home": 4.0})   # h=-2: home by 3+
         self.assertEqual(spreads[-1.5], {"away": 1.5})   # h=-2: away +1.5
         self.assertEqual(spreads[0.5]["home"], 1.25)     # h=+1: home +0.5 (1X)
         self.assertEqual(spreads[1.5], {"away": 6.7})    # h=+1: away -1.5
 
     def test_both_sides_from_different_european_handicaps_make_a_derived_line(self):
-        row = merkur_row(**{"201": 2.27, "203": 2.43, "421": 4.0, "423": 1.5})
+        row = book_row(**{"201": 2.27, "203": 2.43, "421": 4.0, "423": 1.5})
         row["params"] = {"hd2": "-1", "handicap2": "-2"}  # no direct hd2w
-        decoded = mx.markets(row)[0]
+        decoded = bk.markets(row)[0]
         self.assertEqual(decoded["spreads"][-1.5], {"home": 2.27, "away": 1.5})
         self.assertIn(-1.5, decoded["derived"])
 
     def test_team_goal_and_half_time_total_lines(self):
-        row = merkur_row(**{"276": 2.6, "551": 1.45, "555": 5.0, "553": 1.17, "277": 2.5, "552": 1.5,
+        row = book_row(**{"276": 2.6, "551": 1.45, "555": 5.0, "553": 1.17, "277": 2.5, "552": 1.5,
                             "274": 3.6, "817": 1.3, "275": 3.65, "821": 1.28, "209": 6.0, "472": 1.12,
                             "207": 1.1, "267": 6.0})
-        decoded = mx.markets(row)
+        decoded = bk.markets(row)
         self.assertEqual(decoded[0]["teamTotals"]["home"][2.5], {"over": 2.6, "under": 1.45})
         self.assertEqual(decoded[0]["teamTotals"]["home"][3.5], {"over": 5.0, "under": 1.17})
         self.assertEqual(decoded[0]["teamTotals"]["away"][2.5], {"over": 2.5, "under": 1.5})
@@ -371,41 +371,41 @@ class MerkurDecodeTests(unittest.TestCase):
         self.assertEqual(decoded[1]["totals"][2.5], {"over": 6.0, "under": 1.12})
 
     def test_first_half_team_goals(self):
-        row = merkur_row(**{"307": 1.49, "337": 2.50, "308": 2.30, "338": 1.52})
-        decoded = mx.markets(row)[1]["teamTotals"]
+        row = book_row(**{"307": 1.49, "337": 2.50, "308": 2.30, "338": 1.52})
+        decoded = bk.markets(row)[1]["teamTotals"]
         self.assertEqual(decoded["home"], {0.5: {"over": 1.49, "under": 2.50}})
         self.assertEqual(decoded["away"], {0.5: {"over": 2.30, "under": 1.52}})
 
     def test_market_needs_every_side(self):
-        decoded = mx.markets(merkur_row(**{"3": None}))
+        decoded = bk.markets(book_row(**{"3": None}))
         self.assertIsNone(decoded[0]["ml"])
 
 
-class MerkurPairingTests(unittest.TestCase):
+class BookPairingTests(unittest.TestCase):
     def test_one_team_match_with_far_kickoff_is_not_paired(self):
         pin = [{"id": "1", "comp": "c", "home": "Santomera", "away": "Mazarron", "ts": 16 * 3600000}]
         mer = [{"id": "m", "comp": "c", "home": "El San Martin Ra", "away": "Lealtad", "ts": 12 * 3600000}]
-        self.assertEqual(mx.pair(pin, mer), {})
+        self.assertEqual(bk.pair(pin, mer), {})
         mer[0]["ts"] = pin[0]["ts"]
-        self.assertIn("1", mx.pair(pin, mer))
+        self.assertIn("1", bk.pair(pin, mer))
 
     def test_name_scores(self):
-        self.assertEqual(mx.name_score("Paris Saint-Germain", "PSG"), 1.0)
-        self.assertEqual(mx.name_score("Atletico Madrid", "Atl. Madrid"), 1.0)
-        self.assertEqual(mx.name_score("Borussia Dortmund", "Dortmund"), 1.0)
-        self.assertEqual(mx.name_score("AGF", "Aarhus"), 1.0)
-        self.assertEqual(mx.name_score("Olympiakos", "Olympiacos"), 1.0)
-        self.assertEqual(mx.name_score("The New Saints", "TNS"), 1.0)
-        self.assertEqual(mx.name_score("Chelsea", "Arsenal"), 0.0)
-        self.assertEqual(mx.name_score("Colchester United", "Colchester U21"), 1.0)
-        self.assertEqual(mx.name_score("Queens Park Rangers", "QPR U21"), 1.0)
-        self.assertEqual(mx.name_score("Ethiopian Medhin", "Ethiopian Insurance"), 1.0)
-        self.assertEqual(mx.name_score("BC Khimki", "Khimki M."), 1.0)
-        self.assertEqual(mx.name_score("Chelyabinsk", "Chelbasket"), 1.0)
-        self.assertEqual(mx.name_score("Mekelakeya", "Defence Force"), 1.0)
-        self.assertEqual(mx.name_score("Union Saint-Gilloise II", "Union SG 2"), 1.0)
-        self.assertEqual(mx.name_score("RAEC Mons", "Renaissance Mons"), 1.0)
-        self.assertEqual(mx.name_score("Diosgyori VTK", "DVTK"), 1.0)
+        self.assertEqual(bk.name_score("Paris Saint-Germain", "PSG"), 1.0)
+        self.assertEqual(bk.name_score("Atletico Madrid", "Atl. Madrid"), 1.0)
+        self.assertEqual(bk.name_score("Borussia Dortmund", "Dortmund"), 1.0)
+        self.assertEqual(bk.name_score("AGF", "Aarhus"), 1.0)
+        self.assertEqual(bk.name_score("Olympiakos", "Olympiacos"), 1.0)
+        self.assertEqual(bk.name_score("The New Saints", "TNS"), 1.0)
+        self.assertEqual(bk.name_score("Chelsea", "Arsenal"), 0.0)
+        self.assertEqual(bk.name_score("Colchester United", "Colchester U21"), 1.0)
+        self.assertEqual(bk.name_score("Queens Park Rangers", "QPR U21"), 1.0)
+        self.assertEqual(bk.name_score("Ethiopian Medhin", "Ethiopian Insurance"), 1.0)
+        self.assertEqual(bk.name_score("BC Khimki", "Khimki M."), 1.0)
+        self.assertEqual(bk.name_score("Chelyabinsk", "Chelbasket"), 1.0)
+        self.assertEqual(bk.name_score("Mekelakeya", "Defence Force"), 1.0)
+        self.assertEqual(bk.name_score("Union Saint-Gilloise II", "Union SG 2"), 1.0)
+        self.assertEqual(bk.name_score("RAEC Mons", "Renaissance Mons"), 1.0)
+        self.assertEqual(bk.name_score("Diosgyori VTK", "DVTK"), 1.0)
         self.assertEqual(dash.other_score("Colchester United", "Colchester U21"), 0.0)
 
     def test_pair_is_one_to_one_within_competition_and_window(self):
@@ -420,31 +420,31 @@ class MerkurPairingTests(unittest.TestCase):
             {"id": 3, "comp": 1, "home": "Inter", "away": "Milan", "ts": 0},  # wrong competition
             {"id": 4, "comp": 2, "home": "Inter", "away": "Milan", "ts": 5 * 3600000},  # too late
         ]
-        pairs = mx.pair(pin, mer)
+        pairs = bk.pair(pin, mer)
         self.assertEqual({k: v[0]["id"] for k, v in pairs.items()}, {"a": 1, "b": 2})
 
 
 class ComparisonTests(unittest.TestCase):
     def test_board_compares_against_fair_odds(self):
-        state = make_state(FakeAPI([event(1)]), [merkur_row()])
+        state = make_state(FakeAPI([event(1)]), [book_row()])
         match = state.board()["matches"][0]
-        merkur = match["merkur"]
+        book = match["book"]
 
-        self.assertEqual(merkur["id"], 900)
-        self.assertEqual(merkur["kickoffDiff"], 0)
+        self.assertEqual(book["id"], 900)
+        self.assertEqual(book["kickoffDiff"], 0)
         fair_home = match["ml"]["home"]["fair"]
-        self.assertAlmostEqual(merkur["ml"]["home"]["ev"], 2.50 / fair_home - 1, places=3)
-        self.assertNotIn("totals", merkur)
+        self.assertAlmostEqual(book["ml"]["home"]["ev"], 2.50 / fair_home - 1, places=3)
+        self.assertNotIn("totals", book)
         goals = match["goals"]
         self.assertEqual(goals["line"], 2.5)
-        self.assertEqual(goals["merkur"], {"over": 1.85, "under": 1.90})
+        self.assertEqual(goals["book"], {"over": 1.85, "under": 1.90})
         self.assertEqual(goals["pinnacle"], {"over": 1.90, "under": 1.98})
         self.assertAlmostEqual(goals["ev"]["over"], 1.85 / goals["fair"]["over"] - 1, places=3)
-        self.assertIsNotNone(merkur["best"])
+        self.assertIsNotNone(book["best"])
 
     def test_value_list_has_every_outcome_above_pinnacle(self):
         # Pinnacle: 1X2 2.45/3.30/2.90, totals 2.5 1.90/1.98, AH -0.5 2.45/1.58
-        row = merkur_row(**{"1": 2.55, "2": 3.10, "3": 2.95, "24": 1.95, "22": 1.85, "53877": 2.30, "53878": 1.60})
+        row = book_row(**{"1": 2.55, "2": 3.10, "3": 2.95, "24": 1.95, "22": 1.85, "53877": 2.30, "53878": 1.60})
         board = make_state(FakeAPI([event(1)]), [row]).board()
         values = board["values"]
 
@@ -456,7 +456,7 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(handicap["label"], "Villarreal")
         home = next(v for v in values if v["key"] == "home" and v["group"] == "1X2")
         self.assertAlmostEqual(home["overPinnacle"], 2.55 / 2.45 - 1, places=4)
-        self.assertNotIn("rows", board["matches"][0]["merkur"])
+        self.assertNotIn("rows", board["matches"][0]["book"])
 
     def test_goal_line_closest_to_pinnacle_main_line(self):
         totals = {
@@ -466,7 +466,7 @@ class ComparisonTests(unittest.TestCase):
         }
         pin = event(1, periods={"num_0": {"money_line": {"home": 2.45, "draw": 3.30, "away": 2.90},
                                           "totals": totals}})
-        row = merkur_row(**{"25": 2.50, "219": 1.48})  # MX has 2.5 and 3.5
+        row = book_row(**{"25": 2.50, "219": 1.48})  # the bookie has 2.5 and 3.5
         match = make_state(FakeAPI([pin]), [row]).board()["matches"][0]
         self.assertEqual(match["ou"]["line"], 2.5)  # main among half lines: closest to even
         self.assertEqual(match["goals"]["line"], 2.5)
@@ -474,23 +474,23 @@ class ComparisonTests(unittest.TestCase):
     def test_unpaired_match_shows_pinnacle_main_goal_line(self):
         match = make_state(FakeAPI([event(1)])).board()["matches"][0]
         self.assertEqual(match["goals"]["line"], 2.5)
-        self.assertIsNone(match["goals"]["merkur"])
+        self.assertIsNone(match["goals"]["book"])
         self.assertEqual(match["goals"]["pinnacle"], {"over": 1.90, "under": 1.98})
 
     def test_goal_line_movement_is_tracked(self):
-        rows = [merkur_row()]
+        rows = [book_row()]
         state = make_state(FakeAPI([event(1)]), rows)
         state.board()
         rows[0]["odds"]["24"] = 1.80
-        state.merkur.at = 0
+        state.book.at = 0
         board = state.board(refresh=True)
         goals = board["matches"][0]["goals"]
-        self.assertEqual(goals["mxPrev"], {"over": 1.85, "under": 1.90})
-        self.assertEqual(goals["mxChangedAt"], board["merkur"]["fetchedAt"])
+        self.assertEqual(goals["bookPrev"], {"over": 1.85, "under": 1.90})
+        self.assertEqual(goals["bookChangedAt"], board["book"]["fetchedAt"])
         self.assertIsNone(goals["pinPrev"])
 
     def test_derived_and_partial_handicaps_are_compared_without_margin(self):
-        # Pinnacle AH -0.5 2.45/1.58, AH +0.5 and AH -1.5; Merkur: -0.5 from "1"/"X2", -1.5 home from euro h=-1
+        # Pinnacle AH -0.5 2.45/1.58, AH +0.5 and AH -1.5; the bookie: -0.5 from "1"/"X2", -1.5 home from euro h=-1
         spreads = {
             "-0.5": {"hdp": -0.5, "home": 2.45, "away": 1.58},
             "0.5": {"hdp": 0.5, "home": 1.40, "away": 3.10},
@@ -498,90 +498,90 @@ class ComparisonTests(unittest.TestCase):
         }
         pin = event(1, periods={"num_0": {"money_line": {"home": 2.45, "draw": 3.30, "away": 2.90},
                                           "spreads": spreads}})
-        row = merkur_row(**{"1": 2.55, "9": 1.60, "7": 1.45, "3": 3.00, "201": 4.20})
+        row = book_row(**{"1": 2.55, "9": 1.60, "7": 1.45, "3": 3.00, "201": 4.20})
         row["params"] = {"hd2": "-1"}  # no direct hd2w
         state = make_state(FakeAPI([pin]), [row])
         state.board()
-        rows = {r["line"]: r for r in state.match("1")["merkur"]["periods"]["ft"] if r["group"] == "Hendikep"}
+        rows = {r["line"]: r for r in state.match("1")["book"]["periods"]["ft"] if r["group"] == "Hendikep"}
 
         self.assertEqual(sorted(rows), [-1.5, -0.5, 0.5])
         for line in rows:
             self.assertTrue(rows[line]["derived"])
-            self.assertIsNone(rows[line]["merkurMargin"])
+            self.assertIsNone(rows[line]["bookMargin"])
             self.assertIsNotNone(rows[line]["pinnacleMargin"])
         # AH -0.5: both sides ("1" 2.55 vs home 2.45, "X2" 1.60 vs away 1.58)
-        self.assertEqual([(o["key"], o["merkur"], o["pinnacle"]) for o in rows[-0.5]["outcomes"]],
+        self.assertEqual([(o["key"], o["book"], o["pinnacle"]) for o in rows[-0.5]["outcomes"]],
                          [("home", 2.55, 2.45), ("away", 1.60, 1.58)])
         # AH -1.5: only the home side, from the European handicap
-        self.assertEqual([(o["key"], o["merkur"]) for o in rows[-1.5]["outcomes"]], [("home", 4.20)])
+        self.assertEqual([(o["key"], o["book"]) for o in rows[-1.5]["outcomes"]], [("home", 4.20)])
         fair_home = rows[-1.5]["outcomes"][0]["fair"]
         self.assertAlmostEqual(rows[-1.5]["outcomes"][0]["ev"], 4.20 / fair_home - 1, places=3)
 
     def test_direct_handicap_keeps_its_margin(self):
-        state = make_state(FakeAPI([event(1)]), [merkur_row()])
+        state = make_state(FakeAPI([event(1)]), [book_row()])
         state.board()
-        row = next(r for r in state.match("1")["merkur"]["periods"]["ft"] if r["group"] == "Hendikep")
+        row = next(r for r in state.match("1")["book"]["periods"]["ft"] if r["group"] == "Hendikep")
         self.assertFalse(row["derived"])
-        self.assertAlmostEqual(row["merkurMargin"], (1 / 1.70 + 1 / 2.05 - 1) * 100, places=2)
+        self.assertAlmostEqual(row["bookMargin"], (1 / 1.70 + 1 / 2.05 - 1) * 100, places=2)
 
     def test_value_list_flags_derived_rows_and_keeps_one_sided_outcomes(self):
         spreads = {"-1.5": {"hdp": -1.5, "home": 4.00, "away": 1.27}}
         pin = event(1, periods={"num_0": {"money_line": {"home": 2.45, "draw": 3.30, "away": 2.90},
                                           "spreads": spreads}})
-        row = merkur_row(**{"201": 4.30})
+        row = book_row(**{"201": 4.30})
         row["params"] = {"hd2": "-1"}
         values = make_state(FakeAPI([pin]), [row]).board()["values"]
         handicap = [v for v in values if v["group"] == "Hendikep"]
         self.assertEqual(len(handicap), 1)
         self.assertTrue(handicap[0]["derived"])
-        self.assertIsNone(handicap[0]["merkurMargin"])
-        self.assertEqual((handicap[0]["line"], handicap[0]["key"], handicap[0]["merkur"]), (-1.5, "home", 4.30))
+        self.assertIsNone(handicap[0]["bookMargin"])
+        self.assertEqual((handicap[0]["line"], handicap[0]["key"], handicap[0]["book"]), (-1.5, "home", 4.30))
 
     def test_draw_no_bet_is_compared_with_level_handicap(self):
-        # Pinnacle AH 0.0: 1.82 / 2.06; MerkurXtip "X vraća ulog" W1/W2 (264/265)
-        row = merkur_row(**{"264": 1.85, "265": 2.00})
+        # Pinnacle AH 0.0: 1.82 / 2.06; the bookie "X vraća ulog" W1/W2 (264/265)
+        row = book_row(**{"264": 1.85, "265": 2.00})
         state = make_state(FakeAPI([event(1)]), [row])
         state.board()
-        rows = state.match("1")["merkur"]["periods"]["ft"]
+        rows = state.match("1")["book"]["periods"]["ft"]
         dnb = next(r for r in rows if r["group"] == "Hendikep" and r["line"] == 0.0)
-        self.assertEqual([(o["key"], o["merkur"], o["pinnacle"]) for o in dnb["outcomes"]],
+        self.assertEqual([(o["key"], o["book"], o["pinnacle"]) for o in dnb["outcomes"]],
                          [("home", 1.85, 1.82), ("away", 2.00, 2.06)])
-        self.assertEqual(mx.markets(row)[0]["spreads"][0.0], {"home": 1.85, "away": 2.00})
+        self.assertEqual(bk.markets(row)[0]["spreads"][0.0], {"home": 1.85, "away": 2.00})
 
     def test_detail_lists_compared_markets_and_skips_lines_pinnacle_lacks(self):
-        state = make_state(FakeAPI([event(1)]), [merkur_row()])
+        state = make_state(FakeAPI([event(1)]), [book_row()])
         state.board()
-        detail = state.match("1")["merkur"]
+        detail = state.match("1")["book"]
 
         groups = [(r["group"], r["line"]) for r in detail["periods"]["ft"]]
         self.assertEqual(groups, [("1X2", None), ("Ukupno golova", 2.5), ("Hendikep", -0.5)])
         self.assertEqual(detail["periods"]["ht"], [])
 
-    def test_unpaired_match_and_merkur_failure(self):
-        class Down(FakeMerkurAPI):
+    def test_unpaired_match_and_book_failure(self):
+        class Down(FakeBookAPI):
             def offer(self):
-                raise RuntimeError("MerkurXtip nije dostupan")
+                raise RuntimeError("ponuda nije dostupna")
 
         state = make_state(FakeAPI([event(1)]))
-        state.merkur.api = Down()
+        state.book.api = Down()
         board = state.board()
-        self.assertIsNone(board["matches"][0]["merkur"])
-        self.assertIn("nije dostupan", board["merkur"]["error"])
-        self.assertIsNone(state.match("1")["merkur"])
+        self.assertIsNone(board["matches"][0]["book"])
+        self.assertIn("nije dostupna", board["book"]["error"])
+        self.assertIsNone(state.match("1")["book"])
 
-    def test_merkur_price_change_is_tracked(self):
-        rows = [merkur_row()]
+    def test_book_price_change_is_tracked(self):
+        rows = [book_row()]
         state = make_state(FakeAPI([event(1)]), rows)
-        first = state.board()["matches"][0]["merkur"]
+        first = state.board()["matches"][0]["book"]
         self.assertIsNone(first["prev"])
 
         rows[0]["odds"]["1"] = 2.40
-        state.merkur.at = 0  # expire the offer cache
+        state.book.at = 0  # expire the offer cache
         board = state.board(refresh=True)
-        merkur = board["matches"][0]["merkur"]
-        self.assertEqual(merkur["prev"]["home"], 2.50)
-        self.assertEqual(merkur["ml"]["home"]["odds"], 2.40)
-        self.assertEqual(merkur["changedAt"], board["merkur"]["fetchedAt"])
+        book = board["matches"][0]["book"]
+        self.assertEqual(book["prev"]["home"], 2.50)
+        self.assertEqual(book["ml"]["home"]["odds"], 2.40)
+        self.assertEqual(book["changedAt"], board["book"]["fetchedAt"])
 
     def test_board_has_league_name_and_main_line_limit(self):
         match = make_state(FakeAPI([event(1)])).board()["matches"][0]
@@ -589,8 +589,8 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(match["ah"]["max"], 500)
 
     def test_kickoff_difference_is_reported(self):
-        state = make_state(FakeAPI([event(1)]), [merkur_row(ts=KICKOFF_MS + 3600000)])
-        self.assertEqual(state.board()["matches"][0]["merkur"]["kickoffDiff"], 60)
+        state = make_state(FakeAPI([event(1)]), [book_row(ts=KICKOFF_MS + 3600000)])
+        self.assertEqual(state.board()["matches"][0]["book"]["kickoffDiff"], 60)
 
 
 class MergeTests(unittest.TestCase):
@@ -622,8 +622,8 @@ class BasketballTests(unittest.TestCase):
                     "totals": {"235.5": {"points": 235.5, "over": 1.85, "under": 1.95}},
                 }}}
 
-    def test_merkur_markets_use_line_params(self):
-        decoded = bb.merkur_markets(self.ROW)
+    def test_book_markets_use_line_params(self):
+        decoded = bb.book_markets(self.ROW)
         self.assertEqual(decoded["ml"], {"home": 1.67, "away": 2.2})
         self.assertEqual(decoded["spreads"], {-4.5: {"home": 2.08, "away": 1.77}, -7.5: {"home": 2.48, "away": 1.52}})
         self.assertEqual(decoded["totals"], {235.5: {"over": 1.9, "under": 1.9}})
@@ -635,15 +635,15 @@ class BasketballTests(unittest.TestCase):
                                   ("Ukupno poena", 235.5)})
         self.assertEqual(match["total"]["line"], 235.5)
         self.assertEqual(match["spread"]["line"], -4.5)  # closest to even Pinnacle prices
-        self.assertTrue(all(v["merkur"] > v["pinnacle"] for v in values))
+        self.assertTrue(all(v["book"] > v["pinnacle"] for v in values))
 
-    def test_match_without_merkur_keeps_pinnacle_main_lines(self):
+    def test_match_without_book_keeps_pinnacle_main_lines(self):
         match, values = bb.shape_match(self.event(), None)
-        self.assertIsNone(match["merkur"])
-        self.assertIsNone(match["total"]["merkur"])
+        self.assertIsNone(match["book"])
+        self.assertIsNone(match["total"]["book"])
         self.assertEqual(values, [])
 
-    def test_pairs_by_merkur_league_id(self):
+    def test_pairs_by_book_league_id(self):
         pairs = bb.pair_events([self.event()], [self.ROW])
         self.assertEqual(pairs["7"][0]["id"], 1)
 
@@ -705,8 +705,8 @@ class TennisTests(unittest.TestCase):
         self.assertIn("num_1", out["games"])
         self.assertEqual(out["home"], "Stan Wawrinka")
 
-    def test_merkur_markets_use_line_params_and_fixed_set_totals(self):
-        decoded = tennis.merkur_markets(self.ROW)
+    def test_book_markets_use_line_params_and_fixed_set_totals(self):
+        decoded = tennis.book_markets(self.ROW)
         self.assertEqual(decoded["ml"], {"home": 2.4, "away": 1.5})
         self.assertEqual(decoded["setspreads"], {1.5: {"home": 1.57, "away": 2.2}})
         self.assertEqual(decoded["settotals"], {2.5: {"over": 2.35, "under": 1.48}})
@@ -714,7 +714,7 @@ class TennisTests(unittest.TestCase):
         self.assertEqual(decoded["totals"], {22.5: {"over": 2.0, "under": 1.7}})
         self.assertEqual(decoded["home"], {11.5: {"over": 1.75, "under": 1.92}})
         self.assertEqual(decoded["away"], {})
-        first_set = tennis.merkur_markets(self.ROW, "s1")
+        first_set = tennis.book_markets(self.ROW, "s1")
         self.assertEqual(first_set["ml"], {"home": 2.25, "away": 1.55})
         self.assertEqual(first_set["totals"], {9.5: {"over": 1.8, "under": 2.0}})
 
@@ -723,8 +723,8 @@ class TennisTests(unittest.TestCase):
         spreads = pin["setspreads"]
         self.assertEqual(pin["setwin"]["home"], {"yes": spreads[1.5]["home"], "no": spreads[1.5]["away"]})
         self.assertEqual(pin["setwin"]["away"], {"yes": spreads[-1.5]["away"], "no": spreads[-1.5]["home"]})
-        self.assertEqual(tennis.merkur_markets(self.ROW)["setwin"], {"home": {"yes": 1.2}, "away": {"yes": 1.4}})
-        swapped = tennis.merkur_markets({**self.ROW, "pinSwapped": True})["setwin"]
+        self.assertEqual(tennis.book_markets(self.ROW)["setwin"], {"home": {"yes": 1.2}, "away": {"yes": 1.4}})
+        swapped = tennis.book_markets({**self.ROW, "pinSwapped": True})["setwin"]
         self.assertEqual(swapped, {"home": {"yes": 1.4}, "away": {"yes": 1.2}})
         self.assertEqual(tennis.set_win({1.5: {"home": 1.2, "away": 4.0}, 2.5: {"home": 1.1, "away": 7.0}},
                                         {3.5: {}}), {"home": {"yes": 1.1, "no": 7.0}})
@@ -749,14 +749,14 @@ class TennisTests(unittest.TestCase):
         self.assertEqual(match["leagueId"], "ATP Lyon")
         self.assertEqual(match["spread"]["line"], 3.5)
         self.assertEqual(match["total"]["line"], 22.5)
-        self.assertTrue(all(v["merkur"] > v["pinnacle"] for v in values))
+        self.assertTrue(all(v["book"] > v["pinnacle"] for v in values))
         self.assertIn("1. set", {v["periodLabel"] for v in values})
 
-    def test_match_without_merkur_keeps_pinnacle_main_lines(self):
+    def test_match_without_book_keeps_pinnacle_main_lines(self):
         match, values = tennis.shape_match(self.merged(), None)
-        self.assertIsNone(match["merkur"])
+        self.assertIsNone(match["book"])
         self.assertEqual(match["total"]["line"], 22.5)
-        self.assertIsNone(match["total"]["merkur"])
+        self.assertIsNone(match["total"]["book"])
         self.assertEqual(values, [])
 
     def test_player_names_pair_by_surname_and_initial(self):
@@ -788,7 +788,7 @@ class TennisTests(unittest.TestCase):
 
 class HandballTests(unittest.TestCase):
     def test_women_marker_covers_both_sides_and_country_aliases_pair(self):
-        # MerkurXtip marks only one team ("Kaunas W") and does not call the league a women's one
+        # The bookie marks only one team ("Kaunas W") and does not call the league a women's one
         self.assertEqual(handball.women("Kaunas W", "Avarca de Menorca", "CEV"), ("Kaunas W", "Avarca de Menorca W"))
         self.assertEqual(handball.women("TK Kaunas VDU", "Avarca", "CEV Challenge Cup Women"),
                          ("TK Kaunas VDU W", "Avarca W"))
@@ -842,7 +842,7 @@ class HandballTests(unittest.TestCase):
                          {("Pobednik", None), ("Hendikep", -4.5), ("Ukupno golova", 62.5)})  # AH -4 is a whole line
         self.assertEqual({r["group"] for r in match["periods"]["h1"]}, {"Ukupno golova"})  # 31.5 in both books
         self.assertEqual(match["sport"], "HB")
-        self.assertEqual(match["merkur"]["ml"]["home"]["odds"], 1.13)
+        self.assertEqual(match["book"]["ml"]["home"]["odds"], 1.13)
         self.assertTrue(values)
 
     def test_three_way_winner_compares_with_the_1x2(self):
@@ -859,7 +859,7 @@ class HandballTests(unittest.TestCase):
         self.assertEqual([r["group"] for r in match["rows"]], ["Pobednik"])
         self.assertEqual(match["sport"], "V")
         self.assertIsNone(match["spread"])  # set handicaps are not handball goals
-        self.assertEqual(handball.merkur_markets(self.V_ROW)["spreads"], {})
+        self.assertEqual(handball.book_markets(self.V_ROW)["spreads"], {})
 
     def test_a_match_pairs_only_within_its_sport_and_sex(self):
         ts = bb.event_ts(self.handball())
@@ -876,12 +876,12 @@ class HandballTests(unittest.TestCase):
         ts = bb.event_ts(self.handball())
         rows = [{**self.HB_ROW, "kickOffTime": ts, "live": False}, {**self.V_ROW, "kickOffTime": ts, "live": False}]
         bare = {**self.handball(), "event_id": 10, "periods": {"num_0": {"money_line": {"home": 1.5, "away": 2.5}}}}
-        state = handball.HandballState(dash.History(path=None), str, mx.OfferCache(api=FakeMerkurAPI(rows)))
+        state = handball.HandballState(dash.History(path=None), str, bk.OfferCache(api=FakeBookAPI(rows)))
         state.get_api = lambda: FakeAPI([self.handball(), self.volleyball(), bare])
         board = state.board()
         self.assertEqual(sorted(m["id"] for m in board["matches"]), [7, 8])  # the event without a total is neither yet
         self.assertEqual({c["badge"] for c in board["competitions"]}, {"handball", "volleyball"})
-        self.assertEqual(board["merkur"]["paired"], 2)
+        self.assertEqual(board["book"]["paired"], 2)
         self.assertTrue(state.owns(7) and state.owns("8") and not state.owns(10))
 
     def test_competition_uses_the_pinnwire_league(self):
@@ -928,14 +928,14 @@ class HockeyTests(unittest.TestCase):
         self.assertEqual(first["ml"], {"home": 1.85, "away": 2.1})
         self.assertIsNone(first["x12"])
 
-    def test_merkur_markets_decode_regulation_and_period(self):
-        decoded = hockey.merkur_markets(self.ROW)
+    def test_book_markets_decode_regulation_and_period(self):
+        decoded = hockey.book_markets(self.ROW)
         self.assertEqual(decoded["ml"], {"home": 1.6, "away": 2.4})
         self.assertEqual(decoded["x12"], {"home": 2.1, "draw": 4.2, "away": 3.6})
         self.assertEqual(decoded["spreads"], {-1.5: {"home": 2.9, "away": 1.38}})  # "X vraća ulog" (264/265) ignored
         self.assertEqual(decoded["totals"], {5.5: {"over": 1.7, "under": 2.05}})
         self.assertEqual(decoded["home"], {3.5: {"over": 1.95, "under": 1.8}})
-        first = hockey.merkur_markets(self.ROW, "p1")
+        first = hockey.book_markets(self.ROW, "p1")
         self.assertEqual(first["ml"], {"home": 1.8, "away": 2.0})
         self.assertEqual(first["totals"], {1.5: {"over": 1.75, "under": 2.0}})
         self.assertIsNone(first["x12"])
@@ -949,12 +949,12 @@ class HockeyTests(unittest.TestCase):
         self.assertEqual([o["key"] for o in x12["outcomes"]], ["home", "draw", "away"])
         self.assertEqual({r["group"] for r in match["periods"]["p1"]}, {"Pobednik", "Ukupno golova"})
         self.assertEqual(match["ml"]["home"]["odds"], 1.62)
-        self.assertEqual(match["merkur"]["ml"]["home"]["odds"], 1.6)
+        self.assertEqual(match["book"]["ml"]["home"]["odds"], 1.6)
         self.assertEqual(match["total"]["line"], 5.5)
-        self.assertTrue(all(v["merkur"] > v["pinnacle"] for v in values))
+        self.assertTrue(all(v["book"] > v["pinnacle"] for v in values))
 
     def test_goals_and_handicap_never_come_from_the_period_with_overtime(self):
-        # MerkurXtip's goals and handicap are the 60 minutes: PinnWire period 0 (with overtime) must not feed them
+        # The bookie's goals and handicap are the 60 minutes: PinnWire period 0 (with overtime) must not feed them
         event = self.event()
         event["periods"]["num_0"].update({
             "spreads": {"-1.5": {"hdp": -1.5, "home": 3.3, "away": 1.3, "max": 999}},
@@ -974,10 +974,10 @@ class HockeyTests(unittest.TestCase):
         self.assertEqual([o["pinnacle"] for o in total["outcomes"]], [1.75, 2.0])
         self.assertEqual(match["total"]["pinnacle"], {"over": 1.75, "under": 2.0})
         quotes = hockey.drop_quotes(event, match)["4"][1]
-        self.assertNotIn(("total", 0, 5.5, "over"), quotes)  # a drop of the period 0 total matches no MerkurXtip price
+        self.assertNotIn(("total", 0, 5.5, "over"), quotes)  # a drop of the period 0 total matches no bookie price
         self.assertNotIn(("spread", 0, -1.5, "home"), quotes)
 
-    def test_alias_pairs_a_short_merkur_name(self):
+    def test_alias_pairs_a_short_book_name(self):
         self.assertEqual(hockey.name_score("ZSC Lions", "Zurich"), 1.0)
         self.assertEqual(hockey.name_score("SCL Tigers", "Langnau"), 1.0)
         late = {**self.ROW, "kickOffTime": bb.event_ts(self.event()) + 4 * 3600 * 1000, "live": False}
@@ -991,13 +991,13 @@ class HockeyTests(unittest.TestCase):
         third = {**other, "event_id": 6, "home": "Valerenga", "away": "Frisk Asker"}
         offered = {**self.ROW, "id": 10, "home": "Valerenga", "away": "Frisk Asker", "leagueId": 77,
                    "leagueShort": "NOR EL", "kickOffTime": bb.event_ts(self.event()), "live": False}
-        state = hockey.HockeyState(dash.History(path=None), str, mx.OfferCache(api=FakeMerkurAPI([offered])))
+        state = hockey.HockeyState(dash.History(path=None), str, bk.OfferCache(api=FakeBookAPI([offered])))
         state.get_api = lambda: FakeAPI([self.event(), other, third])
         board = state.board()
         self.assertEqual([m["id"] for m in board["matches"]], [4])
         self.assertEqual([m["id"] for m in board["otherMissing"]], [5])  # 6 is offered under an untracked league
         self.assertEqual([(c["key"], c["country"]) for c in board["otherCompetitions"]], [("x1", "Norway")])
-        self.assertEqual([(o["leagueId"], o["mxLeagueId"], o["count"]) for o in board["otherOffered"]], [(1, 77, 1)])
+        self.assertEqual([(o["leagueId"], o["bookLeagueId"], o["count"]) for o in board["otherOffered"]], [(1, 77, 1)])
         with self.assertRaises(LookupError):
             state.match("5")
 
@@ -1011,7 +1011,7 @@ class HockeyTests(unittest.TestCase):
 
 
 class MmaTests(unittest.TestCase):
-    # MerkurXtip lists the fight the other way round: Moicano first
+    # The bookie lists the fight the other way round: Moicano first
     ROW = {
         "id": 7, "home": "Moicano, Renato", "away": "Nolan, Tom", "kickOffTime": 1_900_000_000_000 + 4 * 3600 * 1000,
         "leagueId": 2404691, "odds": {"264": 1.79, "265": 2.0, "54291": 1.52, "54290": 2.49, "54292": 1.28},
@@ -1028,28 +1028,28 @@ class MmaTests(unittest.TestCase):
     def pair(self):
         return mma.pair_events([self.event()], [self.ROW])["8"]
 
-    def test_reversed_merkur_fight_pairs_and_reads_the_winner_the_other_way_round(self):
+    def test_reversed_book_fight_pairs_and_reads_the_winner_the_other_way_round(self):
         row, score = self.pair()
         self.assertEqual(score, 1.0)
         self.assertTrue(row[mma.SWAPPED])
-        self.assertEqual(mma.merkur_markets(row)["ml"], {"home": 2.0, "away": 1.79})
+        self.assertEqual(mma.book_markets(row)["ml"], {"home": 2.0, "away": 1.79})
         self.assertFalse(self.ROW.get(mma.SWAPPED))  # the cached offer row is left as it is
 
     def test_straight_fight_keeps_its_order(self):
         straight = {**self.ROW, "home": "Nolan, Tom", "away": "Moicano, Renato"}
         row, _ = mma.pair_events([self.event()], [straight])["8"]
         self.assertFalse(row.get(mma.SWAPPED))
-        self.assertEqual(mma.merkur_markets(row)["ml"], {"home": 1.79, "away": 2.0})
+        self.assertEqual(mma.book_markets(row)["ml"], {"home": 1.79, "away": 2.0})
 
     def test_fight_compares_winner_and_total_rounds(self):
         match, values = mma.shape_match(self.event(), self.pair())
         self.assertEqual({(r["group"], r["line"]) for r in match["rows"]}, {("Pobednik", None), ("Ukupno rundi", 1.5)})
-        self.assertEqual((match["merkur"]["home"], match["merkur"]["away"]), ("Nolan, Tom", "Moicano, Renato"))
-        self.assertEqual(match["merkur"]["ml"]["away"]["odds"], 1.79)
+        self.assertEqual((match["book"]["home"], match["book"]["away"]), ("Nolan, Tom", "Moicano, Renato"))
+        self.assertEqual(match["book"]["ml"]["away"]["odds"], 1.79)
         self.assertIsNone(match["spread"])
         self.assertEqual(match["total"]["line"], 1.5)
         self.assertEqual(next(r for r in match["rows"] if r["line"] == 1.5)["maxBet"], 1025)
-        self.assertTrue(all(v["merkur"] > v["pinnacle"] for v in values))
+        self.assertTrue(all(v["book"] > v["pinnacle"] for v in values))
 
     def test_names_pair_across_name_order_and_aliases(self):
         self.assertEqual(mma.fighter_score("Zachary Reese", "Reese, Zach"), 1.0)
@@ -1068,7 +1068,7 @@ class MmaTests(unittest.TestCase):
     def test_drop_quotes_are_in_period_zero(self):
         match, _ = mma.shape_match(self.event(), self.pair())
         quotes = mma.drop_quotes(self.event(), match)["8"][1]
-        self.assertEqual(quotes[("moneyline", 0, None, "away")], {"merkur": 1.79, "fair": 1.925})
+        self.assertEqual(quotes[("moneyline", 0, None, "away")], {"book": 1.79, "fair": 1.925})
         self.assertIn(("total", 0, 1.5, "under"), quotes)
 
 
@@ -1088,7 +1088,7 @@ class OtherLeagueTests(unittest.TestCase):
         missing, _, paired = dash.unpaired_other(events, offer, set())
         self.assertEqual(missing, {"3"})
         offered = dash.offered_other(events, paired)
-        self.assertEqual([(o["leagueId"], o["count"]) for o in offered], [(999, 2)])  # the women's match is not the senior one MerkurXtip offers
+        self.assertEqual([(o["leagueId"], o["count"]) for o in offered], [(999, 2)])  # the women's match is not the senior one the bookie offers
         missing, _, _ = dash.unpaired_other(events, offer, {12})
         self.assertEqual(missing, {"2", "3"})  # an offer row already used inside the tracked leagues is not reused
 
@@ -1102,11 +1102,11 @@ class OtherLeagueTests(unittest.TestCase):
         self.assertEqual(paired["1"]["id"], 11)
 
     def test_missing_other_lists_unpaired_events_with_their_league(self):
-        state = dash.DashboardState(history=object(), merkur=FakeMerkurAPI)
+        state = dash.DashboardState(history=object(), book=FakeBookAPI)
         events = [self.event(1, "Bala Town", "Penybont")]
         out = state.missing_other(events, [], set())
         self.assertEqual([m["id"] for m in out], [1])
-        self.assertIsNone(out[0]["merkur"])
+        self.assertIsNone(out[0]["book"])
         comps = dash.other_competitions(out)
         self.assertEqual((comps[0]["country"], comps[0]["name"], comps[0]["key"]), ("Wales", "Cymru Premier", "x999"))
         self.assertEqual(dash.split_league("NHL"), ("Ostalo", "NHL"))
@@ -1181,14 +1181,14 @@ class BasketballModelTests(unittest.TestCase):
     def test_modeled_row_flags_value_on_a_lagging_total(self):
         ladder = self.ladder()
         pin = {"ml": None, "spreads": {}, "totals": ladder, "home": {}, "away": {}}
-        merkur = {"ml": None, "spreads": {}, "totals": {161.5: {"over": 1.9, "under": 1.9}}, "home": {}, "away": {},
+        book = {"ml": None, "spreads": {}, "totals": {161.5: {"over": 1.9, "under": 1.9}}, "home": {}, "away": {},
                   "main": {"spreads": None, "totals": 161.5}}
-        rows = bb.compare(pin, merkur)
+        rows = bb.compare(pin, book)
         self.assertEqual(len(rows), 1)
         self.assertTrue(rows[0]["modeled"])
         over = next(o for o in rows[0]["outcomes"] if o["key"] == "over")
         self.assertGreater(over["ev"], 0.1)
-        gaps = bb.stale_gaps(pin, merkur)
+        gaps = bb.stale_gaps(pin, book)
         self.assertEqual(gaps, {"Ukupno poena": -5.0})
         items = bb.value_items(1, rows, gaps)
         self.assertEqual([(i["key"], i["stale"], i["modeled"]) for i in items], [("over", -5.0, True)])
@@ -1205,19 +1205,19 @@ class MissingHintTests(unittest.TestCase):
                {"id": "2", "comp": 5, "home": "Nobody", "away": "Else", "ts": 0}]
         mer = [{"id": 10, "comp": 5, "home": "Alpha Zeta", "away": "Mmm Nnn", "ts": 60000},
                {"id": 11, "comp": 6, "home": "Nobody", "away": "Else", "ts": 0}]
-        hints = mx.closest_unpaired(pin, mer, mx.pair(pin, mer))
+        hints = bk.closest_unpaired(pin, mer, bk.pair(pin, mer))
         self.assertEqual(hints["1"][0]["id"], 10)
         self.assertNotIn("2", hints)  # the only same-name row belongs to another competition
 
     def test_women_marker_is_ignored_in_names(self):
-        self.assertGreaterEqual(mx.name_score("AZS UMCS Lublin", "Lublin W"), 1.0)
+        self.assertGreaterEqual(bk.name_score("AZS UMCS Lublin", "Lublin W"), 1.0)
 
 
 class PrematchRowTests(unittest.TestCase):
     def test_live_flag_before_kickoff_still_counts_as_prematch(self):
-        self.assertTrue(mx.is_prematch({"live": True, "kickOffTime": 2000}, now_ms=1000))
-        self.assertFalse(mx.is_prematch({"live": True, "kickOffTime": 500}, now_ms=1000))
-        self.assertTrue(mx.is_prematch({"live": False, "kickOffTime": 500}, now_ms=1000))
+        self.assertTrue(bk.is_prematch({"live": True, "kickOffTime": 2000}, now_ms=1000))
+        self.assertFalse(bk.is_prematch({"live": True, "kickOffTime": 500}, now_ms=1000))
+        self.assertTrue(bk.is_prematch({"live": False, "kickOffTime": 500}, now_ms=1000))
 
 
 class BasketballPeriodTests(unittest.TestCase):
@@ -1227,20 +1227,20 @@ class BasketballPeriodTests(unittest.TestCase):
                       "overUnderFirstPeriod": "42.5"}}
 
     def test_first_half_codes(self):
-        half = bb.merkur_markets(self.ROW, "ht")
+        half = bb.book_markets(self.ROW, "ht")
         self.assertEqual(half["ml"], {"home": 1.6, "away": 2.2})
         self.assertEqual(half["spreads"], {-1.5: {"home": 1.85, "away": 1.85}})
         self.assertEqual(half["totals"], {86.5: {"over": 1.9, "under": 1.8}})
 
     def test_first_quarter_codes(self):
-        quarter = bb.merkur_markets(self.ROW, "q1")
+        quarter = bb.book_markets(self.ROW, "q1")
         self.assertEqual(quarter["ml"], {"home": 1.7, "away": 2.1})
         self.assertEqual(quarter["spreads"], {0.5: {"home": 1.9, "away": 1.8}})
         self.assertEqual(quarter["totals"], {42.5: {"over": 1.88, "under": 1.82}})
 
     def test_period_rows_carry_their_period_into_value_items(self):
         pin = {"ml": None, "spreads": {}, "totals": {86.5: {"over": 1.95, "under": 1.85}}, "home": {}, "away": {}}
-        rows = bb.compare(pin, bb.merkur_markets(self.ROW, "ht"), "ht", 0.71)
+        rows = bb.compare(pin, bb.book_markets(self.ROW, "ht"), "ht", 0.71)
         self.assertEqual({r["period"] for r in rows}, {"ht"})
         items = bb.value_items(1, rows)
         self.assertTrue(all(i["period"] == "ht" and i["periodLabel"] == "1. poluvreme" for i in items))
@@ -1270,8 +1270,8 @@ class DropTests(unittest.TestCase):
         rows = dash.compare_period(kit_event(), {"ml": {"home": 2.5, "draw": 3.2, "away": 2.8},
                                                  "spreads": {-0.5: {"home": 2.5, "away": 1.5}}}, 0)
         index = pw.quote_index({0: rows}, dash.DROP_GROUPS)
-        self.assertEqual(index[pw.drop_key("moneyline", 0, "draw", None)]["merkur"], 3.2)
-        self.assertEqual(index[pw.drop_key("spread", 0, "away", 0.5)]["merkur"], 1.5)
+        self.assertEqual(index[pw.drop_key("moneyline", 0, "draw", None)]["book"], 3.2)
+        self.assertEqual(index[pw.drop_key("spread", 0, "away", 0.5)]["book"], 1.5)
 
     def test_tennis_games_drop_finds_the_parent_match(self):
         event = tennis.TennisState.incoming(None, {"events": [
@@ -1279,16 +1279,16 @@ class DropTests(unittest.TestCase):
         match, _ = tennis.shape_match(event, (TennisTests.ROW, 1.0))
         quotes = tennis.drop_quotes(event, match)
         self.assertEqual(quotes["8"][0], 7)
-        self.assertEqual(quotes["8"][1][pw.drop_key("spread", 0, "home", 3.5)]["merkur"], 1.72)
-        self.assertEqual(quotes["7"][1][pw.drop_key("moneyline", 0, "home", None)]["merkur"], 2.4)
+        self.assertEqual(quotes["8"][1][pw.drop_key("spread", 0, "home", 3.5)]["book"], 1.72)
+        self.assertEqual(quotes["7"][1][pw.drop_key("moneyline", 0, "home", None)]["book"], 2.4)
 
-    def test_drops_response_adds_match_and_merkur_edge(self):
+    def test_drops_response_adds_match_and_book_edge(self):
         feed = dash.DropFeed(lambda: "")
         now = int(dash.time.time())
         feed.add([{**self.FRAME, "alerted": now}, {**self.FRAME, "sport_id": 99, "alerted": now}])
         key = pw.drop_key("spread", 0, "away", 4)
         old_feed, old_quotes = dash.DROPS, dash.BB_STATE.quotes
-        dash.DROPS, dash.BB_STATE.quotes = feed, {"1637470980": (1637470980, {key: {"merkur": 1.72, "fair": 1.7}})}
+        dash.DROPS, dash.BB_STATE.quotes = feed, {"1637470980": (1637470980, {key: {"book": 1.72, "fair": 1.7}})}
         try:
             body = dash.drops_response({"sport": ["basketball"], "min": ["1"]})
             above = dash.drops_response({"sport": ["basketball"], "min": ["5"]})
@@ -1296,15 +1296,15 @@ class DropTests(unittest.TestCase):
             dash.DROPS, dash.BB_STATE.quotes = old_feed, old_quotes
         [drop] = body["drops"]
         self.assertEqual(drop["match_id"], 1637470980)
-        self.assertEqual(drop["merkur"], {"odds": 1.72, "ev": round(1.72 / 1.655 - 1, 4)})
+        self.assertEqual(drop["book"], {"odds": 1.72, "ev": round(1.72 / 1.655 - 1, 4)})
         self.assertEqual(above["drops"], [])
 
 
 class ClvTests(unittest.TestCase):
     @staticmethod
-    def match(merkur, fair=2.0, starts="2030-08-28T19:30:00Z", line=2.5, **row):
-        outcome = {"key": "over", "label": "Više", "merkur": merkur, "pinnacle": 1.9, "fair": fair,
-                   "ev": merkur / fair - 1}
+    def match(book, fair=2.0, starts="2030-08-28T19:30:00Z", line=2.5, **row):
+        outcome = {"key": "over", "label": "Više", "book": book, "pinnacle": 1.9, "fair": fair,
+                   "ev": book / fair - 1}
         return [{"id": 7, "home": "A", "away": "B", "league": "Liga", "starts": starts,
                  "rows": [("ft", {"group": "Ukupno golova", "line": line, "outcomes": [outcome], **row})]}]
 
@@ -1320,7 +1320,7 @@ class ClvTests(unittest.TestCase):
         self.store.observe("football", self.match(2.30, fair=2.2), "2030-08-28T19:20:00Z")
         stats = self.store.stats(now="2030-08-28T20:00:00Z")
         [row] = stats["recent"]
-        self.assertEqual((row["merkur"], row["close_fair"], row["clv"]), (2.10, 2.2, round(2.10 / 2.2 - 1, 4)))
+        self.assertEqual((row["book"], row["close_fair"], row["clv"]), (2.10, 2.2, round(2.10 / 2.2 - 1, 4)))
         self.assertEqual(stats["total"]["n"], 1)
         self.assertEqual(stats["total"]["positive"], 0)
 
@@ -1498,24 +1498,25 @@ class AppLogTests(unittest.TestCase):
             state.refresh(full=True)
         self.assertIn("broj mečeva je pao sa 20 na 1", logs.output[0])
 
-    def test_merkur_outage_logs_once_and_recovery_once(self):
-        class Flaky(FakeMerkurAPI):
+    def test_book_outage_logs_once_and_recovery_once(self):
+        class Flaky(FakeBookAPI):
             down = True
 
             def offer(self):
                 if self.down:
-                    raise RuntimeError("Merkur pao")
+                    raise RuntimeError("ponuda pala")
                 return []
 
         api = Flaky()
-        state = dash.DashboardState(dash.History(path=None), merkur=mx.OfferCache(api=api))
+        state = dash.DashboardState(dash.History(path=None), book=bk.OfferCache(api=api))
         state.label = "football"
         with self.assertLogs("xtip.snapshot", "INFO") as logs:
-            state.merkur_offer()
-            state.merkur_offer()
+            state.book_offer()
+            state.book_offer()
             api.down = False
-            state.merkur_offer()
-        self.assertEqual(self.messages(logs), ["football: MerkurXtip: Merkur pao", "football: MerkurXtip ponovo radi"])
+            state.book_offer()
+        name = state.bookie.label
+        self.assertEqual(self.messages(logs), [f"football: {name}: ponuda pala", f"football: {name} ponovo radi"])
 
     def drop_feed(self, *outcomes):
         feed = dash.DropFeed(lambda: "key")
@@ -1594,21 +1595,21 @@ class CompetitionTableTests(unittest.TestCase):
                 with self.subTest(sport=sport, field=field):
                     self.assertEqual(self.duplicates(c[field] for c in table), set())
 
-    def test_each_merkur_league_maps_to_one_competition(self):
+    def test_each_book_league_maps_to_one_competition(self):
         football = [m for c in dash.COMPETITIONS
-                    for m in [*([c["merkur"]] if "merkur" in c else []), *c.get("merkur_also", [])]]
-        basketball = [m for c in bb.COMPETITIONS for m in (c["mx_id"], *c.get("mx_extra", ()))]
+                    for m in [*([c["book"]] if "book" in c else []), *c.get("book_also", [])]]
+        basketball = [m for c in bb.COMPETITIONS for m in (c["book_id"], *c.get("book_extra", ()))]
         for sport, ids in (("football", football), ("basketball", basketball),
-                           ("hockey", [c["mx_id"] for c in hockey.COMPETITIONS])):
+                           ("hockey", [c["book_id"] for c in hockey.COMPETITIONS])):
             with self.subTest(sport=sport):
                 self.assertEqual(self.duplicates(ids), set())
 
-    def test_shared_merkur_league_points_at_a_competition_with_its_own(self):
-        own = {c["id"] for c in dash.COMPETITIONS if "merkur" in c}
+    def test_shared_book_league_points_at_a_competition_with_its_own(self):
+        own = {c["id"] for c in dash.COMPETITIONS if "book" in c}
         for c in dash.COMPETITIONS:
             with self.subTest(key=c["key"]):
-                self.assertTrue(("merkur" in c) != ("merkur_of" in c))
-                self.assertIn(c.get("merkur_of", c["id"]), own)
+                self.assertTrue(("book" in c) != ("book_of" in c))
+                self.assertIn(c.get("book_of", c["id"]), own)
 
     def test_every_competition_has_a_badge_colour(self):
         with open(os.path.join(os.path.dirname(dash.__file__), "frontend", "dashboard", "dashboard.css"),
@@ -1774,12 +1775,12 @@ class ValueMarkTests(unittest.TestCase):
 
     def body(self, **extra):
         return {"key": "football|7|ft|Hendikep|-0.5|home", "sport": "football", "starts": "2026-11-12T18:00:00Z",
-                "status": "done", "merkur": 2.05, **extra}
+                "status": "done", "book": 2.05, **extra}
 
     def test_set_list_and_clear(self):
         now = value_marks.parse_starts("2026-11-12T12:00:00Z", 0)
         mark = self.store.set(self.body(), self.sports, user="damir", now=now)
-        self.assertEqual((mark["status"], mark["merkur"], mark["user"]), ("done", 2.05, "damir"))
+        self.assertEqual((mark["status"], mark["book"], mark["user"]), ("done", 2.05, "damir"))
         self.store.set(self.body(status="custom", note="  javljeno trejderu "), self.sports, now=now)
         self.assertEqual(self.store.all(now=now)["football|7|ft|Hendikep|-0.5|home"]["note"], "javljeno trejderu")
         self.store.set(self.body(status=""), self.sports, now=now)
@@ -1787,7 +1788,7 @@ class ValueMarkTests(unittest.TestCase):
 
     def test_bad_input_is_rejected(self):
         for body in (self.body(status="x"), self.body(sport="golf"), self.body(key=""),
-                     self.body(status="custom"), self.body(merkur="x")):
+                     self.body(status="custom"), self.body(book="x")):
             with self.subTest(body=body), self.assertRaises(ValueError):
                 self.store.set(body, self.sports)
 
@@ -1817,12 +1818,12 @@ class PriceHistoryTests(unittest.TestCase):
         self.store.observe("football", self.match(2.10), now=1000)
         value = {"matchId": 7, "period": "ft", "group": "Ukupno golova", "line": 2.5, "key": "over"}
         self.store.annotate("football", [value])
-        self.assertEqual((value["seenAt"], value["pinChangedAt"], value["mxChangedAt"]),
+        self.assertEqual((value["seenAt"], value["pinChangedAt"], value["bookChangedAt"]),
                          (price_history.stamp(1000), None, None))
         self.store.observe("football", self.match(2.05), now=1060)
         self.store.observe("football", self.match(2.05, fair=2.1), now=1090)  # Pinnacle fair moved, price did not
         self.store.annotate("football", [value])
-        self.assertEqual((value["pinChangedAt"], value["mxChangedAt"]), (None, price_history.stamp(1060)))
+        self.assertEqual((value["pinChangedAt"], value["bookChangedAt"]), (None, price_history.stamp(1060)))
 
     def test_state_survives_a_restart(self):
         path = os.path.join(tempfile.mkdtemp(), "prices.sqlite3")
@@ -1834,7 +1835,7 @@ class PriceHistoryTests(unittest.TestCase):
         self.assertEqual(second.observe("football", self.match(2.05), now=1090), 0)
         value = {"matchId": 7, "period": "ft", "group": "Ukupno golova", "line": 2.5, "key": "over"}
         second.annotate("football", [value])
-        self.assertEqual(value["mxChangedAt"], price_history.stamp(1060))
+        self.assertEqual(value["bookChangedAt"], price_history.stamp(1060))
         second.db.close()
 
     def test_started_matches_are_pruned(self):
@@ -1845,13 +1846,44 @@ class PriceHistoryTests(unittest.TestCase):
         self.assertEqual(self.store.series("football", 7), [])
 
     def test_state_board_reports_and_annotates_values(self):
-        row = merkur_row(**{"1": 2.55, "2": 3.10, "3": 2.95, "24": 1.95, "22": 1.85})
+        row = book_row(**{"1": 2.55, "2": 3.10, "3": 2.95, "24": 1.95, "22": 1.85})
         state = make_state(FakeAPI([event(1)]), [row])
         state.prices = self.store
         values = state.board()["values"]
         self.assertTrue(values)
-        self.assertTrue(all(v["seenAt"] and v["mxChangedAt"] is None for v in values))
+        self.assertTrue(all(v["seenAt"] and v["bookChangedAt"] is None for v in values))
         self.assertTrue(self.store.series("football", 1))
+
+
+class StoreMigrationTests(unittest.TestCase):
+    """Stores opened on files written with the old bookie-specific column names rename them and keep their rows."""
+
+    def legacy(self, folder, name, script):
+        import sqlite3
+
+        path = os.path.join(folder, name)
+        db = sqlite3.connect(path)
+        db.executescript(script)
+        db.commit()
+        db.close()
+        return path
+
+    def test_old_columns_are_renamed_and_rows_kept(self):
+        with tempfile.TemporaryDirectory() as folder:
+            clv_path = self.legacy(folder, "clv.sqlite3", clv.SCHEMA.replace("book", "merkur"))
+            prices_path = self.legacy(folder, "prices.sqlite3", price_history.SCHEMA.replace("book", "merkur"))
+            marks_path = self.legacy(folder, "marks.sqlite3", value_marks.SCHEMA.replace("book", "merkur")
+                                     + "INSERT INTO marks (mkey, sport, status, note, merkur, user, at, starts) "
+                                       "VALUES ('k', 'football', 'done', '', 1.9, '', '2026-01-01T00:00:00Z', '2999-01-01T00:00:00Z');")
+            stores = (clv.ClvStore(clv_path), price_history.PriceStore(prices_path), value_marks.MarkStore(marks_path))
+            for store, table, expected in zip(stores, ("signals", "prices", "marks"),
+                                              ({"book", "close_book"}, {"book"}, {"book"})):
+                columns = {row[1] for row in store.db.execute(f"PRAGMA table_info({table})")}
+                self.assertTrue(expected <= columns, table)
+                self.assertFalse({"merkur", "close_merkur"} & columns, table)
+            self.assertEqual(stores[2].db.execute("SELECT book FROM marks WHERE mkey = 'k'").fetchone()[0], 1.9)
+            for store in stores:
+                store.db.close()
 
 
 class CleanHandicapTests(unittest.TestCase):
@@ -1951,8 +1983,8 @@ class BookieAdapterTests(unittest.TestCase):
         fb_state = dash.DashboardState(dash.History(path=None), bookie=adapter)
         fb_state.get_api = lambda: FakeAPI([kit_event(1, league_id=2196)])
         fb_board = fb_state.board()
-        self.assertEqual(fb_board["merkur"]["paired"], 1)
-        self.assertEqual(fb_board["matches"][0]["merkur"]["ml"]["home"]["odds"], 2.60)
+        self.assertEqual(fb_board["book"]["paired"], 1)
+        self.assertEqual(fb_board["matches"][0]["book"]["ml"]["home"]["odds"], 2.60)
 
         bb_event = {
             "event_id": 2, "sport_id": 3, "league_id": 487, "league_name": "USA - NBA",
@@ -1963,8 +1995,8 @@ class BookieAdapterTests(unittest.TestCase):
         bb_state = bb.BasketballState(dash.History(path=None), lambda: "key", bookie=adapter)
         bb_state.get_api = lambda: FakeAPI([bb_event])
         bb_board = bb_state.board()
-        self.assertEqual(bb_board["merkur"]["paired"], 1)
-        self.assertEqual(bb_board["matches"][0]["merkur"]["ml"]["home"]["odds"], 2.10)
+        self.assertEqual(bb_board["book"]["paired"], 1)
+        self.assertEqual(bb_board["matches"][0]["book"]["ml"]["home"]["odds"], 2.10)
 
 
 if __name__ == "__main__":

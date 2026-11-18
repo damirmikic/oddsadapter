@@ -2,7 +2,7 @@
 
 Marks live on the server (SQLite, `data/marks.sqlite3`), so everyone using the same server sees the same marks; the UI
 polls `/api/marks`. A mark is keyed by an opaque string the UI builds from sport, match, period, market, line and
-outcome, keeps the MerkurXtip price it was set at (the UI flags a mark whose price has moved since) and the basic-auth
+outcome, keeps the bookie price it was set at (the UI flags a mark whose price has moved since) and the basic-auth
 user the proxy passes in `X-Remote-User`. Marks are deleted `KEEP_HOURS` after kickoff.
 
 This module must not import `pinnwire_dashboard` (run as a script that module is `__main__`).
@@ -14,6 +14,8 @@ import sqlite3
 import threading
 import time
 from datetime import datetime, timezone
+
+import store_migrate
 
 KEEP_HOURS = 24  # a mark is kept this long after its match's kickoff
 PRUNE_EVERY = 600  # seconds between prunes
@@ -27,7 +29,7 @@ CREATE TABLE IF NOT EXISTS marks (
     sport TEXT NOT NULL,
     status TEXT NOT NULL,
     note TEXT NOT NULL DEFAULT '',
-    merkur REAL,
+    book REAL,
     user TEXT NOT NULL DEFAULT '',
     at INTEGER NOT NULL,
     starts INTEGER NOT NULL
@@ -57,9 +59,11 @@ class MarkStore:
         self.pruned_at = 0.0
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
+            # files written before the bookie-neutral names
+            store_migrate.rename_columns(self.db, "marks", {"merkur": "book"})
 
     def set(self, body, sports, user="", now=None):
-        """Set or clear one mark from a request body {key, sport, starts, status, note, merkur}.
+        """Set or clear one mark from a request body {key, sport, starts, status, note, book}.
 
         An empty status clears the mark. Bad input raises ValueError (the handler answers 400)."""
         now = int(now or time.time())
@@ -70,10 +74,10 @@ class MarkStore:
             raise ValueError("Nepoznat sport.")
         status = body.get("status") or ""
         note = str(body.get("note") or "").strip()[:MAX_NOTE]
-        merkur = body.get("merkur")
-        if merkur is not None:
+        book = body.get("book")
+        if book is not None:
             try:
-                merkur = float(merkur)
+                book = float(book)
             except (TypeError, ValueError):
                 raise ValueError("Neispravna kvota.") from None
         with self.lock, self.db:
@@ -85,9 +89,9 @@ class MarkStore:
             if status == "custom" and not note:
                 raise ValueError("Upiši napomenu.")
             self.db.execute(
-                "INSERT OR REPLACE INTO marks (mkey, sport, status, note, merkur, user, at, starts) "
+                "INSERT OR REPLACE INTO marks (mkey, sport, status, note, book, user, at, starts) "
                 "VALUES (?,?,?,?,?,?,?,?)",
-                (mkey, sport, status, note, merkur, (user or "")[:60], now, parse_starts(body.get("starts"), now)))
+                (mkey, sport, status, note, book, (user or "")[:60], now, parse_starts(body.get("starts"), now)))
             if now - self.pruned_at >= PRUNE_EVERY:
                 self.db.execute("DELETE FROM marks WHERE starts < ?", (now - KEEP_HOURS * 3600,))
                 self.pruned_at = now
@@ -95,19 +99,19 @@ class MarkStore:
 
     def get(self, mkey):
         with self.lock:
-            row = self.db.execute("SELECT mkey, status, note, merkur, user, at FROM marks WHERE mkey = ?",
+            row = self.db.execute("SELECT mkey, status, note, book, user, at FROM marks WHERE mkey = ?",
                                   (mkey,)).fetchone()
         return self._out(row)[1] if row else None
 
     def all(self, now=None):
-        """Every mark of a match that has not been over for `KEEP_HOURS`: {key: {status, note, merkur, user, at}}."""
+        """Every mark of a match that has not been over for `KEEP_HOURS`: {key: {status, note, book, user, at}}."""
         cutoff = int(now or time.time()) - KEEP_HOURS * 3600
         with self.lock:
-            rows = self.db.execute("SELECT mkey, status, note, merkur, user, at FROM marks WHERE starts >= ?",
+            rows = self.db.execute("SELECT mkey, status, note, book, user, at FROM marks WHERE starts >= ?",
                                    (cutoff,)).fetchall()
         return dict(self._out(row) for row in rows)
 
     @staticmethod
     def _out(row):
-        mkey, status, note, merkur, user, at = row
-        return mkey, {"status": status, "note": note, "merkur": merkur, "user": user, "at": stamp(at)}
+        mkey, status, note, book, user, at = row
+        return mkey, {"status": status, "note": note, "book": book, "user": user, "at": stamp(at)}

@@ -1,4 +1,4 @@
-// "Nedostaju" view: Pinnacle matches MerkurXtip does not offer.
+// "Nedostaju" view: Pinnacle matches the bookie does not offer.
 import { useEffect, useMemo, useState } from "react";
 import { readStored, writeStored } from "./api.js";
 import { fmt2, fmtKickoffShort, fmtLine } from "./format.js";
@@ -27,7 +27,7 @@ export function OtherOffered({ leagues }) {
         {leagues.map((o) => (
           <li key={o.leagueId}>
             <b>{o.leagueName}</b> · {o.count} {o.count === 1 ? "meč" : "mečeva"}
-            <small> · PinnWire {o.leagueId} · {label} {o.mxLeague} ({o.mxLeagueId})</small>
+            <small> · PinnWire {o.leagueId} · {label} {o.bookLeague} ({o.bookLeagueId})</small>
           </li>
         ))}
       </ul>

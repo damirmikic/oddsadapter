@@ -1,35 +1,35 @@
 // Football match detail panel and odds modal.
 import { useEffect, useState } from "react";
 import { requestJson } from "../api.js";
-import { clockFmt, dayLabel, evClass, fmtEv, fmtLimit, fmtLine, fmtMargins, fmtOdds, fmtPct, marketLine, merkurClass, timeFmt } from "../format.js";
+import { clockFmt, dayLabel, evClass, fmtEv, fmtLimit, fmtLine, fmtMargins, fmtOdds, fmtPct, marketLine, bookClass, timeFmt } from "../format.js";
 import { CompBadge, DerivedTag, KickoffWarning, ML_SIDES, Price, useBookie } from "../ui.jsx";
 import { PriceChart, Sparkline, histKey, usePriceHistory } from "../priceHistory.jsx";
 
-function BookieComparison({ merkur, periodKey, home, away, history }) {
+function BookieComparison({ book, periodKey, home, away, history }) {
   const { label, short } = useBookie();
   const [open, setOpen] = useState("");
-  if (!merkur) {
+  if (!book) {
     return <p className="state">Meč nije u ponudi {label} (ili nije uparen).</p>;
   }
-  const rows = merkur.periods[periodKey] || [];
+  const rows = book.periods[periodKey] || [];
   const sideLabel = (group, label) => {
     if (group === "Hendikep") return label === "1" ? home : away;
     return label;
   };
   return (
-    <section className="detail-card mx-card">
+    <section className="detail-card book-card">
       <h3>
         {label} vs Pinnacle fer
-        <small>{merkur.code ? `šifra ${merkur.code} · ` : ""}{clockFmt.format(new Date(merkur.fetchedAt))}</small>
+        <small>{book.code ? `šifra ${book.code} · ` : ""}{clockFmt.format(new Date(book.fetchedAt))}</small>
       </h3>
-      <p className="mx-names">
-        {merkur.home} – {merkur.away}
-        <KickoffWarning diff={merkur.kickoffDiff} />
+      <p className="book-names">
+        {book.home} – {book.away}
+        <KickoffWarning diff={book.kickoffDiff} />
       </p>
-      {merkur.error && <p className="state error">{merkur.error} Prikazane su kvote iz liste ponude.</p>}
+      {book.error && <p className="state error">{book.error} Prikazane su kvote iz liste ponude.</p>}
       {!rows.length && <p className="muted">Nema tržišta koja postoje kod obe kuće za ovaj period.</p>}
       {!!rows.length && (
-        <table className="lines mx-table">
+        <table className="lines book-table">
           <thead>
             <tr>
               <th>Tržište</th>
@@ -45,27 +45,27 @@ function BookieComparison({ merkur, periodKey, home, away, history }) {
           {rows.map((row, i) => {
             const opened = row.outcomes.find((o) => histKey(periodKey, row.group, row.line, o.key) === open);
             return (
-            <tbody key={`${row.group}-${row.line}`} className={i > 0 && rows[i - 1].group !== row.group ? "mx-group-start" : ""}>
+            <tbody key={`${row.group}-${row.line}`} className={i > 0 && rows[i - 1].group !== row.group ? "book-group-start" : ""}>
               {row.outcomes.map((o, index) => (
-                <tr key={o.key} className={index === 0 ? "mx-first" : ""}>
+                <tr key={o.key} className={index === 0 ? "book-first" : ""}>
                   {index === 0 && (
-                    <th rowSpan={row.outcomes.length} className="mx-market">
+                    <th rowSpan={row.outcomes.length} className="book-market">
                       {row.group}
                       {row.line != null && <span>{marketLine(row.group, row.line)}{row.derived && <DerivedTag />}</span>}
                       <small title={`Marža ${label} / Pinnacle`}>
-                        {fmtMargins(row.merkurMargin, row.pinnacleMargin)}
+                        {fmtMargins(row.bookMargin, row.pinnacleMargin)}
                       </small>
                     </th>
                   )}
-                  <td className="mx-side">{sideLabel(row.group, o.label)}</td>
-                  <td className="mx-fair-cell">{fmtOdds(o.fair)}</td>
+                  <td className="book-side">{sideLabel(row.group, o.label)}</td>
+                  <td className="book-fair-cell">{fmtOdds(o.fair)}</td>
                   <td>{fmtOdds(o.pinnacle)}</td>
                   <td>
-                    <span className={`mc-cell ${merkurClass(o.merkur, o.pinnacle, o.ev)}`}><b>{fmtOdds(o.merkur)}</b></span>
+                    <span className={`mc-cell ${bookClass(o.book, o.pinnacle, o.ev)}`}><b>{fmtOdds(o.book)}</b></span>
                   </td>
                   <td><span className={`ev-chip ${evClass(o.ev)}`}>{fmtEv(o.ev)}</span></td>
                   {index === 0 && (
-                    <td rowSpan={row.outcomes.length} className="mx-maxbet">{fmtLimit(row.maxBet) || "—"}</td>
+                    <td rowSpan={row.outcomes.length} className="book-maxbet">{fmtLimit(row.maxBet) || "—"}</td>
                   )}
                   <td>
                     <Sparkline
@@ -215,7 +215,7 @@ export function DetailPanel({ matchId, boardMatch, competition, onClose, onCalls
       {!detail && loading && <p className="state">Učitavam kvote…</p>}
 
       {detail && (
-        <BookieComparison merkur={detail.merkur} periodKey={periodKey} home={match.home} away={match.away} history={history} />
+        <BookieComparison book={detail.book} periodKey={periodKey} home={match.home} away={match.away} history={history} />
       )}
 
       {period && !period.ml && <p className="state">Pinnacle nema ponudu za ovaj period.</p>}
@@ -334,7 +334,7 @@ export function OddsModal({ matchId, boardMatch, onClose, onCalls }) {
         {error && <p className="state error" role="alert">{error}</p>}
         {!detail && !error && <p className="state">Učitavam kvote…</p>}
         {detail && (
-          <BookieComparison merkur={detail.merkur} periodKey={periodKey} home={match.home} away={match.away} history={history} />
+          <BookieComparison book={detail.book} periodKey={periodKey} home={match.home} away={match.away} history={history} />
         )}
       </div>
     </div>

@@ -34,7 +34,7 @@ function ClvTable({ title, rows }) {
   );
 }
 
-// Closing line value of the value outcomes the dashboard flagged (server: clv.py): MerkurXtip price at the signal
+// Closing line value of the value outcomes the dashboard flagged (server: clv.py): the bookie price at the signal
 // against Pinnacle's last fair price before kickoff.
 export function ClvPage() {
   const [days, setDays] = useState(() => readStored("pb.clvDays", 30));
@@ -99,7 +99,7 @@ function ClvContent({ data, days, setDays, sport, setSport }) {
                     <span className="row-league">{r.league} · {clvDateFmt.format(new Date(r.starts))}</span>
                   </td>
                   <td>{CLV_PERIODS[r.period]}{r.grp}{r.line != null ? ` ${fmtLine(r.line, r.grp.startsWith("Hendikep"))}` : ""} <b>{r.label}</b></td>
-                  <td><b>{fmtOdds(r.merkur)}</b></td>
+                  <td><b>{fmtOdds(r.book)}</b></td>
                   <td>{fmtOdds(r.fair)}</td>
                   <td>{r.close_fair != null ? fmtOdds(r.close_fair) : "—"}</td>
                   <td>{r.clv != null ? <span className={`ev-chip ${evClass(r.clv)}`}>{fmtEv(r.clv)}</span> : "—"}</td>

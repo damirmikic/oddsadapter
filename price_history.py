@@ -1,7 +1,7 @@
 """Price history of every compared outcome, for the line-movement charts and the value list's "last change".
 
 Each board hands its compare rows to `PriceStore.observe()` (the same rows the CLV store gets). A row is written only
-when the Pinnacle price, the MerkurXtip price or the Pinnacle fair price of an outcome differs from the last one stored,
+when the Pinnacle price, the bookie price or the Pinnacle fair price of an outcome differs from the last one stored,
 so a quiet match costs nothing. `ClvWorker` refreshes every board in the background, so the history fills without a
 browser. Matches are deleted `KEEP_HOURS` after kickoff. Stored in SQLite next to the CLV store (own file, own lock).
 
@@ -14,6 +14,8 @@ import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+
+import store_migrate
 
 KEEP_HOURS = 24  # history of a match is kept this long after its kickoff
 PRUNE_EVERY = 600  # seconds between prunes
@@ -30,7 +32,7 @@ CREATE INDEX IF NOT EXISTS outcomes_starts ON outcomes (starts);
 CREATE TABLE IF NOT EXISTS prices (
     outcome_id INTEGER NOT NULL,
     at INTEGER NOT NULL,
-    pinnacle REAL, merkur REAL, fair REAL,
+    pinnacle REAL, book REAL, fair REAL,
     PRIMARY KEY (outcome_id, at)
 ) WITHOUT ROWID;
 """
@@ -54,11 +56,13 @@ class PriceStore:
             os.makedirs(os.path.dirname(path), exist_ok=True)
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.lock = threading.Lock()
-        # sport -> {key: [outcome id, starts, pinnacle, merkur, fair, seen at, pinnacle changed at, merkur changed at]}
+        # sport -> {key: [outcome id, starts, pinnacle, book, fair, seen at, pinnacle changed at, book changed at]}
         self.last = {}
         self.pruned_at = 0.0
         with self.lock, self.db:
             self.db.executescript(SCHEMA)
+            # files written before the bookie-neutral names
+            store_migrate.rename_columns(self.db, "prices", {"merkur": "book"})
 
     def _load(self, sport):
         """Last stored state of every outcome of a sport (once per process: the history outlives a restart)."""
@@ -66,7 +70,7 @@ class PriceStore:
             return self.last[sport]
         out = {}
         rows = self.db.execute(
-            "SELECT o.id, o.match_id, o.period, o.grp, o.line, o.outcome, o.starts, p.at, p.pinnacle, p.merkur, p.fair "
+            "SELECT o.id, o.match_id, o.period, o.grp, o.line, o.outcome, o.starts, p.at, p.pinnacle, p.book, p.fair "
             "FROM outcomes o JOIN prices p ON p.outcome_id = o.id WHERE o.sport = ? ORDER BY o.id, p.at", (sport,))
         for oid, match_id, period, group, line, outcome, starts, at, pin, mer, fair in rows:
             k = key(match_id, period, group, line, outcome)
@@ -96,7 +100,7 @@ class PriceStore:
                 for period, row in m["rows"]:
                     for o in row["outcomes"]:
                         k = key(m["id"], period, row["group"], row["line"], o["key"])
-                        prices = (o["pinnacle"], o["merkur"], o["fair"])
+                        prices = (o["pinnacle"], o["book"], o["fair"])
                         entry = last.get(k)
                         if entry is None:
                             oid = self.db.execute(
@@ -114,7 +118,7 @@ class PriceStore:
                             if prices[1] != entry[3]:
                                 entry[7] = now
                         entry[2:5] = prices
-                        self.db.execute("INSERT OR REPLACE INTO prices (outcome_id, at, pinnacle, merkur, fair) "
+                        self.db.execute("INSERT OR REPLACE INTO prices (outcome_id, at, pinnacle, book, fair) "
                                         "VALUES (?,?,?,?,?)", (entry[0], now, *prices))
                         written += 1
             if now - self.pruned_at >= PRUNE_EVERY:
@@ -131,21 +135,21 @@ class PriceStore:
         self.pruned_at = now
 
     def annotate(self, sport, values):
-        """Add `pinChangedAt` / `mxChangedAt` (last price change, None when it has not moved since `seenAt`) to value items."""
+        """Add `pinChangedAt` / `bookChangedAt` (last price change, None when it has not moved since `seenAt`) to value items."""
         with self.lock:
             last = self.last.get(sport) or {}
             for v in values:
                 entry = last.get(key(v["matchId"], v.get("period", "ft"), v["group"], v["line"], v["key"]))
                 v["seenAt"] = stamp(entry[5]) if entry else None
                 v["pinChangedAt"] = stamp(entry[6]) if entry and entry[6] else None
-                v["mxChangedAt"] = stamp(entry[7]) if entry and entry[7] else None
+                v["bookChangedAt"] = stamp(entry[7]) if entry and entry[7] else None
         return values
 
     def series(self, sport, match_id):
-        """Every stored outcome of one match: [{period, group, line, key, points: [[epoch s, pinnacle, merkur, fair]]}]."""
+        """Every stored outcome of one match: [{period, group, line, key, points: [[epoch s, pinnacle, book, fair]]}]."""
         with self.lock:
             rows = self.db.execute(
-                "SELECT o.id, o.period, o.grp, o.line, o.outcome, p.at, p.pinnacle, p.merkur, p.fair "
+                "SELECT o.id, o.period, o.grp, o.line, o.outcome, p.at, p.pinnacle, p.book, p.fair "
                 "FROM outcomes o JOIN prices p ON p.outcome_id = o.id WHERE o.sport = ? AND o.match_id = ? "
                 "ORDER BY o.id, p.at", (sport, str(match_id))).fetchall()
         out = {}

@@ -1,7 +1,7 @@
 // Basketball, tennis, hockey and MMA screen (SportPane), its board, odds modal and board loading.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readStored, requestJson, writeStored } from "./api.js";
-import { DAY_FILTERS, clockFmt, dayKey, dayLabel, evClass, fmt2, fmtEv, fmtKickoffShort, fmtLimit, fmtLine, fmtMargins, fmtOdds, inDayFilter, merkurClass, merkurTitle, timeFmt } from "./format.js";
+import { DAY_FILTERS, clockFmt, dayKey, dayLabel, evClass, fmt2, fmtEv, fmtKickoffShort, fmtLimit, fmtLine, fmtMargins, fmtOdds, inDayFilter, bookClass, bookTitle, timeFmt } from "./format.js";
 import { CompBadge, KickoffWarning, ModeledTag, StaleTag, useBookie } from "./ui.jsx";
 import { PriceChart, Sparkline, histKey, usePriceHistory } from "./priceHistory.jsx";
 import { VALUE_LEVELS, ValueRange, ValueTable, bestPerMarket, isTopLeague, rangePasses } from "./value.jsx";
@@ -21,13 +21,13 @@ function sportValuePasses(value, level, group, teamPrefix) {
   return group === "all" || value.group === group;
 }
 
-// Fair / Pinnacle / MerkurXtip cells of one two-way line market (handicap or total points).
+// Fair / Pinnacle / bookie cells of one two-way line market (handicap or total points).
 function SportLineCells({ cell, sides, signed }) {
   const { label, short } = useBookie();
   if (!cell) return <td className="mc-line mc-group-strong" colSpan={7}><span className="muted">—</span></td>;
   return (
     <>
-      <td className="mc-line mc-group-strong" title={cell.merkur ? "Linija koju imaju obe kuće, najbliža Pinnacle glavnoj" : "Pinnacle glavna linija"}>
+      <td className="mc-line mc-group-strong" title={cell.book ? "Linija koju imaju obe kuće, najbliža Pinnacle glavnoj" : "Pinnacle glavna linija"}>
         {fmtLine(cell.line, signed)}
       </td>
       {sides.map(([side], i) => (
@@ -39,13 +39,13 @@ function SportLineCells({ cell, sides, signed }) {
         </td>
       ))}
       {sides.map(([side], i) => {
-        const odds = cell.merkur?.[side];
+        const odds = cell.book?.[side];
         return (
           <td key={`m${side}`} className={`mc-odds${i === 0 ? " mc-group" : ""}`}>
             {odds ? (
               <span
-                className={`mc-cell ${merkurClass(odds, cell.pinnacle[side], cell.ev?.[side])}`}
-                title={merkurTitle(odds, cell.pinnacle[side], cell.fair[side], cell.ev?.[side], null, short)}
+                className={`mc-cell ${bookClass(odds, cell.pinnacle[side], cell.ev?.[side])}`}
+                title={bookTitle(odds, cell.pinnacle[side], cell.fair[side], cell.ev?.[side], null, short)}
               >
                 {fmt2(odds)}
               </span>
@@ -61,19 +61,19 @@ function SportDetail({ match, periodKey = "ft", history }) {
   const { label, short } = useBookie();
   const [open, setOpen] = useState("");
   const rows = (periodKey === "ft" ? match.rows : match.periods?.[periodKey]) || [];
-  if (!match.merkur) return <p className="muted bb-detail">Meč nije u ponudi {label} (ili nije uparen).</p>;
+  if (!match.book) return <p className="muted bb-detail">Meč nije u ponudi {label} (ili nije uparen).</p>;
   const modeled = rows.filter((r) => r.modeled).length;
   return (
     <div className="bb-detail">
-      <p className="mx-names">
-        {match.merkur.home} – {match.merkur.away}
-        <KickoffWarning diff={match.merkur.kickoffDiff} />
-        {match.merkur.stale?.map((st) => <StaleTag key={st.group} gap={st.gap} />)}
+      <p className="book-names">
+        {match.book.home} – {match.book.away}
+        <KickoffWarning diff={match.book.kickoffDiff} />
+        {match.book.stale?.map((st) => <StaleTag key={st.group} gap={st.gap} />)}
         <small> · upoređeno {rows.length} tržišta{modeled ? `, od toga ${modeled} modelirano` : ""}</small>
       </p>
       {!rows.length && <p className="muted">Nema tržišta koja postoje kod obe kuće.</p>}
       {!!rows.length && (
-        <table className="lines mx-table">
+        <table className="lines book-table">
           <thead>
             <tr>
               <th>Tržište</th>
@@ -92,23 +92,23 @@ function SportDetail({ match, periodKey = "ft", history }) {
             const opened = r.outcomes.find((o) => keyOf(o) === open);
             const side = (o) => (spread ? (o.key === "home" ? match.home : match.away) : o.label);
             return (
-              <tbody key={`${r.group}-${r.line}`} className={i > 0 && rows[i - 1].group !== r.group ? "mx-group-start" : ""}>
+              <tbody key={`${r.group}-${r.line}`} className={i > 0 && rows[i - 1].group !== r.group ? "book-group-start" : ""}>
                 {r.outcomes.map((o, index) => (
-                  <tr key={o.key} className={index === 0 ? "mx-first" : ""}>
+                  <tr key={o.key} className={index === 0 ? "book-first" : ""}>
                     {index === 0 && (
-                      <th rowSpan={r.outcomes.length} className="mx-market">
+                      <th rowSpan={r.outcomes.length} className="book-market">
                         {r.group}
                         {r.line != null && <span>{fmtLine(r.line, spread)}{r.modeled && <ModeledTag />}</span>}
-                        <small title={`Marža ${label} / Pinnacle`}>{fmtMargins(r.merkurMargin, r.pinnacleMargin)}</small>
+                        <small title={`Marža ${label} / Pinnacle`}>{fmtMargins(r.bookMargin, r.pinnacleMargin)}</small>
                       </th>
                     )}
-                    <td className="mx-side">{side(o)}</td>
-                    <td className="mx-fair-cell">{fmtOdds(o.fair)}</td>
+                    <td className="book-side">{side(o)}</td>
+                    <td className="book-fair-cell">{fmtOdds(o.fair)}</td>
                     <td>{fmtOdds(o.pinnacle)}</td>
-                    <td><span className={`mc-cell ${merkurClass(o.merkur, o.pinnacle, o.ev)}`}><b>{fmt2(o.merkur)}</b></span></td>
+                    <td><span className={`mc-cell ${bookClass(o.book, o.pinnacle, o.ev)}`}><b>{fmt2(o.book)}</b></span></td>
                     <td><span className={`ev-chip ${evClass(o.ev)}`}>{fmtEv(o.ev)}</span></td>
                     {index === 0 && (
-                      <td rowSpan={r.outcomes.length} className="mx-maxbet">{fmtLimit(r.maxBet) || "—"}</td>
+                      <td rowSpan={r.outcomes.length} className="book-maxbet">{fmtLimit(r.maxBet) || "—"}</td>
                     )}
                     <td>
                       <Sparkline
@@ -204,7 +204,7 @@ export function SportOddsModal({ sport, matchId, boardMatch, onClose, onCalls })
 
 function SportRow({ match, competition, expanded, onToggle, spread }) {
   const { label, short } = useBookie();
-  const x = match.merkur;
+  const x = match.book;
   return (
     <>
       <tr className={`mc-row${expanded ? " selected" : ""}`} onClick={onToggle}>
@@ -236,8 +236,8 @@ function SportRow({ match, competition, expanded, onToggle, spread }) {
             <td key={`m${side}`} className={`mc-odds${i === 0 ? " mc-group" : ""}`}>
               {odds ? (
                 <span
-                  className={`mc-cell ${merkurClass(odds, match.ml?.[side]?.odds, ev)}`}
-                  title={merkurTitle(odds, match.ml?.[side]?.odds, match.ml?.[side]?.fair, ev, null, short)}
+                  className={`mc-cell ${bookClass(odds, match.ml?.[side]?.odds, ev)}`}
+                  title={bookTitle(odds, match.ml?.[side]?.odds, match.ml?.[side]?.fair, ev, null, short)}
                 >
                   {fmt2(odds)}
                 </span>
@@ -333,7 +333,7 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
 
   const competitions = useMemo(() => board?.competitions || [], [board]);
   const compById = useMemo(() => new Map(competitions.map((c) => [c.id, c])), [competitions]);
-  // "Nedostaju" also lists the untracked leagues of the PinnWire feed that MerkurXtip does not offer
+  // "Nedostaju" also lists the untracked leagues of the PinnWire feed that the bookie does not offer
   const otherCompetitions = board?.otherCompetitions;
   const allCompetitions = useMemo(() => [...competitions, ...(otherCompetitions || [])], [competitions, otherCompetitions]);
   const allById = useMemo(() => new Map(allCompetitions.map((c) => [c.id, c])), [allCompetitions]);
@@ -343,7 +343,7 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
 
   const missingCounts = useMemo(() => {
     const counts = new Map();
-    for (const m of [...(board?.matches || []), ...(board?.otherMissing || [])]) if (!m.merkur) counts.set(m.leagueId, (counts.get(m.leagueId) || 0) + 1);
+    for (const m of [...(board?.matches || []), ...(board?.otherMissing || [])]) if (!m.book) counts.set(m.leagueId, (counts.get(m.leagueId) || 0) + 1);
     return counts;
   }, [board]);
   const missingTotal = useMemo(() => [...missingCounts.values()].reduce((a, b) => a + b, 0), [missingCounts]);
@@ -353,7 +353,7 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
       .filter((m) => (
         (competition === "all" || (view === "missing" ? allById : compById).get(m.leagueId)?.key === competition)
         && inDayFilter(new Date(m.starts), dayFilter) && textOk(m)
-        && (view !== "missing" || !m.merkur)
+        && (view !== "missing" || !m.book)
       )),
     [board, competition, dayFilter, textOk, compById, allById, view],
   );
@@ -499,8 +499,8 @@ export function SportPane({ board, error, loading, dayFilter, setDayFilter, quer
           </div>
           {searchBox}
           <span className="legend mc-legend">
-            <span className="mc-cell mx-fair">{short} ≥ fer</span>
-            <span className="mc-cell mx-above">{short} &gt; Pinnacle</span>
+            <span className="mc-cell book-fair">{short} ≥ fer</span>
+            <span className="mc-cell book-above">{short} &gt; Pinnacle</span>
           </span>
         </div>
         <main className="workspace">

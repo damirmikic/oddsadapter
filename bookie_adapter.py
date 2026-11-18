@@ -1,4 +1,4 @@
-"""Bookie adapter interface, registry, and the default MerkurXtip adapter.
+"""Bookie adapter interface, registry, and the built-in feed adapters.
 
 Pinnacle (via PinnWire) is always the reference book. Any target bookmaker can be plugged in by subclassing
 `BookieAdapter`, registering it with `@register_adapter`, and selecting it via `--bookie <name>`, `XTIP_BOOKIE`,
@@ -13,7 +13,7 @@ import importlib.metadata
 import os
 import time
 
-import bookie_client as mx
+import bookie_client as bk
 
 SPORTS = ("football", "basketball", "tennis", "hockey", "mma", "handball")
 
@@ -170,10 +170,10 @@ class FeedBookieAdapter(BookieAdapter):
     name = "feed"
     label = "Bookie"
     short = "BK"
-    base = mx.BASE
+    base = bk.BASE
 
     _OFFER_PATHS = {
-        "football": mx.OFFER_PATH,
+        "football": bk.OFFER_PATH,
         "basketball": "/restapi/custom/offer/sr/sport/B/mob",
         "tennis": "/restapi/custom/offer/sr/sport/T/mob",
         "hockey": "/restapi/custom/offer/sr/sport/H/mob",
@@ -193,7 +193,7 @@ class FeedBookieAdapter(BookieAdapter):
                 path = self._OFFER_PATHS.get(sport)
                 if path is None:
                     raise ValueError(f"{self.label} ne podržava sport: {sport!r}")
-                self._apis[sport] = mx.BookieAPI(offer_path=path, base=self.base, label=self.label)
+                self._apis[sport] = bk.BookieAPI(offer_path=path, base=self.base, label=self.label)
         return self._apis[sport]
 
     def offer(self, sport):
@@ -203,49 +203,49 @@ class FeedBookieAdapter(BookieAdapter):
         return self._api(sport).match(match_id)
 
     def is_prematch(self, row):
-        return mx.is_prematch(row)
+        return bk.is_prematch(row)
 
     def comp_id(self, sport, row):
         if sport == "football":
             import pinnwire_dashboard as dash
 
-            return dash.merkur_comp(row)
+            return dash.book_comp(row)
         if sport == "basketball":
             import basketball as bb
 
-            return bb.MX_COMP.get(row.get("leagueId"))
+            return bb.BOOK_COMP.get(row.get("leagueId"))
         if sport == "hockey":
             import hockey
 
-            return hockey.MX_COMP.get(row.get("leagueId"))
+            return hockey.BOOK_COMP.get(row.get("leagueId"))
         return None
 
     def decode_markets(self, sport, row, period=None):
         if not row.get("odds") and row.get("betMap"):
             return _decode_betmap(sport, row, period)
         if sport == "football":
-            decoded = mx.markets(row)
+            decoded = bk.markets(row)
             return decoded if period is None else decoded[period]
         if sport == "basketball":
             import basketball as bb
 
-            return bb.merkur_markets(row, period or "ft")
+            return bb.book_markets(row, period or "ft")
         if sport == "tennis":
             import tennis
 
-            return tennis.merkur_markets(row, period or "ft")
+            return tennis.book_markets(row, period or "ft")
         if sport == "hockey":
             import hockey
 
-            return hockey.merkur_markets(row, period or "ft")
+            return hockey.book_markets(row, period or "ft")
         if sport == "mma":
             import mma
 
-            return mma.merkur_markets(row)
+            return mma.book_markets(row)
         if sport == "handball":
             import handball
 
-            return handball.merkur_markets(row, period or "ft")
+            return handball.book_markets(row, period or "ft")
         raise ValueError(f"{self.label} ne podržava sport: {sport!r}")
 
 
@@ -283,11 +283,11 @@ for _name, _label, _short, _base, _aliases in (
 def _bm_ou(bm, ranges, by_param, allowed):
     lines = {}
     for line, (over, under) in ranges.items():
-        prices = mx.betmap_pick(bm, {"over": over, "under": under})
+        prices = bk.betmap_pick(bm, {"over": over, "under": under})
         if prices:
             lines[line] = prices
     sets = [(k, o, u) for k, (o, u) in by_param.items()]
-    for line, prices in mx.betmap_lines(bm, sets, ("over", "under"), allowed=allowed).items():
+    for line, prices in bk.betmap_lines(bm, sets, ("over", "under"), allowed=allowed).items():
         if line not in lines:
             lines[line] = prices
     return lines
@@ -305,21 +305,21 @@ def _bm_spreads(bm, by_param, fixed, derived, euro, allowed):
             put(line, side, odds, direct)
 
     for line, (home, away) in (fixed or {}).items():
-        put_pair(line, mx.betmap_pick(bm, {"home": home, "away": away}), True)
+        put_pair(line, bk.betmap_pick(bm, {"home": home, "away": away}), True)
     sets = [(k, h, a) for k, (h, a) in by_param.items()]
-    for line, pair in mx.betmap_lines(bm, sets, ("home", "away"), allowed=allowed).items():
+    for line, pair in bk.betmap_lines(bm, sets, ("home", "away"), allowed=allowed).items():
         put_pair(line, pair, True)
     for line, codes in (derived or {}).items():
-        put_pair(line, mx.betmap_pick(bm, codes), False)
+        put_pair(line, bk.betmap_pick(bm, codes), False)
     for _, (h1, h2) in (euro or {}).items():
         for sv, entry in (bm.get(h1) or {}).items():
-            h = mx._sv_line(sv)
+            h = bk._sv_line(sv)
             if h is not None and h != 0 and h == round(h):
-                put(h - 0.5, "home", mx._bm_odds(entry), False)
+                put(h - 0.5, "home", bk._bm_odds(entry), False)
         for sv, entry in (bm.get(h2) or {}).items():
-            h = mx._sv_line(sv)
+            h = bk._sv_line(sv)
             if h is not None and h != 0 and h == round(h):
-                put(h + 0.5, "away", mx._bm_odds(entry), False)
+                put(h + 0.5, "away", bk._bm_odds(entry), False)
     lines = {line: {side: odds for side, (odds, _) in sides.items()} for line, sides in prices.items() if sides}
     derived_lines = {line for line, sides in prices.items() if sides and not all(d for _, d in sides.values())}
     return lines, derived_lines
@@ -333,24 +333,24 @@ def _decode_betmap(sport, row, period=None):
     if sport == "football":
         allowed_tot = lambda line: pw.allowed_line(line, "totals")  # noqa: E731
         allowed_sp = lambda line: pw.allowed_line(line, "spreads")  # noqa: E731
-        sp, drv = _bm_spreads(bm, mx.SPREADS, mx.FIXED_SPREADS, mx.DERIVED_SPREADS, mx.EURO_HANDICAPS, allowed_sp)
-        ht_sp, ht_drv = _bm_spreads(bm, mx.HT_SPREADS, None, mx.HT_DERIVED_SPREADS, mx.HT_EURO_HANDICAPS, allowed_sp)
+        sp, drv = _bm_spreads(bm, bk.SPREADS, bk.FIXED_SPREADS, bk.DERIVED_SPREADS, bk.EURO_HANDICAPS, allowed_sp)
+        ht_sp, ht_drv = _bm_spreads(bm, bk.HT_SPREADS, None, bk.HT_DERIVED_SPREADS, bk.HT_EURO_HANDICAPS, allowed_sp)
         decoded = {
             0: {
-                "ml": mx.betmap_pick(bm, mx.ML),
-                "totals": _bm_ou(bm, mx.TOTALS, mx.PARAM_TOTALS, allowed_tot),
+                "ml": bk.betmap_pick(bm, bk.ML),
+                "totals": _bm_ou(bm, bk.TOTALS, bk.PARAM_TOTALS, allowed_tot),
                 "spreads": sp,
                 "derived": drv,
                 "teamTotals": {
-                    s: _bm_ou(bm, mx.TEAM_TOTALS[s], mx.PARAM_TEAM_TOTALS[s], allowed_tot) for s in ("home", "away")
+                    s: _bm_ou(bm, bk.TEAM_TOTALS[s], bk.PARAM_TEAM_TOTALS[s], allowed_tot) for s in ("home", "away")
                 },
             },
             1: {
-                "ml": mx.betmap_pick(bm, mx.HT_ML),
-                "totals": _bm_ou(bm, mx.HT_TOTALS, mx.PARAM_HT_TOTALS, allowed_tot),
+                "ml": bk.betmap_pick(bm, bk.HT_ML),
+                "totals": _bm_ou(bm, bk.HT_TOTALS, bk.PARAM_HT_TOTALS, allowed_tot),
                 "spreads": ht_sp,
                 "derived": ht_drv,
-                "teamTotals": {s: _bm_ou(bm, mx.HT_TEAM_TOTALS[s], {}, allowed_tot) for s in ("home", "away")},
+                "teamTotals": {s: _bm_ou(bm, bk.HT_TEAM_TOTALS[s], {}, allowed_tot) for s in ("home", "away")},
             },
         }
         return decoded if period is None else decoded[period]
@@ -362,13 +362,13 @@ def _decode_betmap(sport, row, period=None):
         import basketball as bb
 
         def _bb(r, per):
-            codes = bb.MX_PERIOD[per]
-            spreads = mx.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed_sp)
-            totals = mx.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
-            home = mx.betmap_lines(bm, codes["home"], ("over", "under"), allowed=allowed)
-            away = mx.betmap_lines(bm, codes["away"], ("over", "under"), allowed=allowed)
+            codes = bb.BOOK_PERIOD[per]
+            spreads = bk.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed_sp)
+            totals = bk.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
+            home = bk.betmap_lines(bm, codes["home"], ("over", "under"), allowed=allowed)
+            away = bk.betmap_lines(bm, codes["away"], ("over", "under"), allowed=allowed)
             out = {
-                "ml": mx.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"]))),
+                "ml": bk.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"]))),
                 "spreads": spreads,
                 "totals": totals,
                 "home": home,
@@ -384,22 +384,22 @@ def _decode_betmap(sport, row, period=None):
         import tennis
 
         def _tn(r, per):
-            codes = tennis.MX_PERIOD[per]
-            out = {"ml": mx.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"]))), **tennis.EMPTY}
-            out["totals"] = mx.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
+            codes = tennis.BOOK_PERIOD[per]
+            out = {"ml": bk.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"]))), **tennis.EMPTY}
+            out["totals"] = bk.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
             if per == "ft":
-                out["setspreads"] = mx.betmap_lines(bm, codes["setspreads"], ("home", "away"), allowed=allowed)
-                out["spreads"] = mx.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed)
-                out["home"] = mx.betmap_lines(bm, codes["home"], ("over", "under"), allowed=allowed)
-                out["away"] = mx.betmap_lines(bm, codes["away"], ("over", "under"), allowed=allowed)
+                out["setspreads"] = bk.betmap_lines(bm, codes["setspreads"], ("home", "away"), allowed=allowed)
+                out["spreads"] = bk.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed)
+                out["home"] = bk.betmap_lines(bm, codes["home"], ("over", "under"), allowed=allowed)
+                out["away"] = bk.betmap_lines(bm, codes["away"], ("over", "under"), allowed=allowed)
                 line, over, under = tennis.SET_TOTAL
-                prices = mx.betmap_pick(bm, {"over": over, "under": under})
+                prices = bk.betmap_pick(bm, {"over": over, "under": under})
                 if prices:
                     out["settotals"] = {line: prices}
                 sides = ("away", "home") if r.get(bb.SWAPPED) else ("home", "away")
                 out["setwin"] = {}
-                for side, mx_side in zip(("home", "away"), sides):
-                    odds = mx.betmap_pick(bm, {"yes": tennis.SET_WIN[mx_side]})
+                for side, book_side in zip(("home", "away"), sides):
+                    odds = bk.betmap_pick(bm, {"yes": tennis.SET_WIN[book_side]})
                     if odds:
                         out["setwin"][side] = odds
             return out
@@ -411,14 +411,14 @@ def _decode_betmap(sport, row, period=None):
         import hockey
 
         def _hk(r, per):
-            codes = hockey.MX_PERIOD[per]
-            out = {"ml": mx.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"]))), **hockey.EMPTY}
+            codes = hockey.BOOK_PERIOD[per]
+            out = {"ml": bk.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"]))), **hockey.EMPTY}
             if "x12" in codes:
-                out["x12"] = mx.betmap_pick(bm, dict(zip(("home", "draw", "away"), codes["x12"])))
-            out["spreads"] = mx.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed)
-            out["totals"] = mx.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
+                out["x12"] = bk.betmap_pick(bm, dict(zip(("home", "draw", "away"), codes["x12"])))
+            out["spreads"] = bk.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed)
+            out["totals"] = bk.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
             for side in ("home", "away"):
-                out[side] = mx.betmap_lines(bm, codes.get(side, ()), ("over", "under"), allowed=allowed)
+                out[side] = bk.betmap_lines(bm, codes.get(side, ()), ("over", "under"), allowed=allowed)
             return out
 
         return bb.reversible(_hk)(row, p)
@@ -428,8 +428,8 @@ def _decode_betmap(sport, row, period=None):
 
         home, away = mma.ML[::-1] if row.get(mma.SWAPPED) else mma.ML
         return {
-            "ml": mx.betmap_pick(bm, {"home": home, "away": away}),
-            "totals": mx.betmap_lines(bm, mma.ROUNDS, ("over", "under"), allowed=allowed),
+            "ml": bk.betmap_pick(bm, {"home": home, "away": away}),
+            "totals": bk.betmap_lines(bm, mma.ROUNDS, ("over", "under"), allowed=allowed),
         }
 
     if sport == "handball":
@@ -437,14 +437,14 @@ def _decode_betmap(sport, row, period=None):
 
         out = dict(handball.EMPTY)
         if row.get("sport") == handball.VOLLEYBALL:
-            out["ml"] = mx.betmap_pick(bm, dict(zip(("home", "away"), handball.VOLLEYBALL_ML)))
+            out["ml"] = bk.betmap_pick(bm, dict(zip(("home", "away"), handball.VOLLEYBALL_ML)))
             return out
-        codes = handball.MX_PERIOD[p]
+        codes = handball.BOOK_PERIOD[p]
         if "ml" in codes:
-            out["ml"] = mx.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"])))
-            out["x12"] = mx.betmap_pick(bm, dict(zip(("home", "draw", "away"), codes["x12"])))
-        out["spreads"] = mx.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed_sp)
-        out["totals"] = mx.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
+            out["ml"] = bk.betmap_pick(bm, dict(zip(("home", "away"), codes["ml"])))
+            out["x12"] = bk.betmap_pick(bm, dict(zip(("home", "draw", "away"), codes["x12"])))
+        out["spreads"] = bk.betmap_lines(bm, codes["spreads"], ("home", "away"), allowed=allowed_sp)
+        out["totals"] = bk.betmap_lines(bm, codes["totals"], ("over", "under"), allowed=allowed)
         return out
 
     raise ValueError(f"Nepoznat sport za betMap: {sport!r}")
