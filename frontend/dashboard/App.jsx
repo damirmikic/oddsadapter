@@ -12,6 +12,7 @@ import { SportPane, useSportBoard } from "./sport.jsx";
 import { AlertsPage, useDropAlerts } from "./alerts.jsx";
 import { ClvPage } from "./clv.jsx";
 import { AllValuePane, collectValues } from "./allValue.jsx";
+import { CoveragePage } from "./coverage.jsx";
 import { GlobalSearch, matchesQuery, searchAll } from "./search.jsx";
 import { BookieContext, DEFAULT_BOOKIE } from "./ui.jsx";
 
@@ -98,6 +99,7 @@ export default function App() {
   const [dropPct, setDropPct] = useState(() => readStored("pb.dropPct", 3));
   const [dropEdge, setDropEdge] = useState(() => readStored("pb.dropEdge", false));
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
   const [alertsPage, setAlertsPage] = useState("drops");
   const [view, setView] = useState(() => {
     const fromUrl = new URLSearchParams(window.location.search).get("view");
@@ -181,6 +183,7 @@ export default function App() {
   const drops = useDropAlerts(boards, dropAlerts, dropPct, apiKeySet, dropEdge);
   const pickSport = useCallback((key) => {
     setAlertsOpen(false);
+    setCoverageOpen(false);
     setSport(key);
   }, []);
   const alertsTab = { count: drops.alerts.length, active: alertsOpen, onOpen: () => setAlertsOpen(true) };
@@ -417,371 +420,383 @@ export default function App() {
 
   return (
     <BookieContext.Provider value={activeBookie}>
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo" aria-hidden="true">P</span>
-          <div>
-            <strong>Odds Monitor</strong>
-            <small>{allValue ? "Value, svi sportovi" : SPORT_VIEWS[sport]?.label || "Fudbal"} · Pinnacle vs {activeBookie.label}</small>
+      <div className="app">
+        <header className="topbar">
+          <div className="brand">
+            <span className="logo" aria-hidden="true">P</span>
+            <div>
+              <strong>Odds Monitor</strong>
+              <small>{allValue ? "Value, svi sportovi" : SPORT_VIEWS[sport]?.label || "Fudbal"} · Pinnacle vs {activeBookie.label}</small>
+            </div>
+            {availableBookies.length > 0 && (
+              <label className="bookie-picker" title="Izaberi kladionicu za poređenje">
+                <span>Kladionica</span>
+                <select
+                  value={activeBookie.name}
+                  disabled={switchingBookie}
+                  onChange={(e) => switchBookie(e.target.value)}
+                >
+                  {availableBookies.map((b) => <option key={b.name} value={b.name}>{b.label}</option>)}
+                </select>
+              </label>
+            )}
           </div>
-          {availableBookies.length > 0 && (
-            <label className="bookie-picker" title="Izaberi kladionicu za poređenje">
-              <span>Kladionica</span>
-              <select
-                value={activeBookie.name}
-                disabled={switchingBookie}
-                onChange={(e) => switchBookie(e.target.value)}
+
+          <div className="status">
+            {cur?.fetchedAt && (
+              <span title={cur.mode === "delta" ? "Delta osvežavanje: preuzete samo promene" : "Pun snapshot"}>
+                <i className={`dot${curLoading ? " busy" : ""}`} />
+                {clockFmt.format(new Date(cur.fetchedAt))}
+                <em>{cur.mode === "delta" ? `Δ ${cur.changed} promena` : "pun snapshot"}</em>
+              </span>
+            )}
+            {cur?.book && (
+              <span
+                className={cur.book.error ? "status-error" : ""}
+                title={cur.book.error || `${activeBookie.label} ponuda: upareni mečevi / mečevi ovih takmičenja u ponudi`}
               >
-                {availableBookies.map((b) => <option key={b.name} value={b.name}>{b.label}</option>)}
+                {activeBookie.short} {cur.book.fetchedAt ? clockFmt.format(new Date(cur.book.fetchedAt)) : "—"}
+                <em>upareno {cur.book.paired}/{cur.book.offered}</em>
+                {cur.book.error && <em>· greška</em>}
+              </span>
+            )}
+          </div>
+
+          <div className="actions">
+            <button
+              type="button"
+              className="button ghost"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Svetla tema" : "Tamna tema"}
+            >
+              {theme === "dark" ? "☀" : "☾"}
+            </button>
+            {pwa.canInstall && (
+              <button type="button" className="button ghost" onClick={pwa.install} title="Instaliraj Odds Monitor kao aplikaciju">
+                ⤓ Instaliraj
+              </button>
+            )}
+            <button
+              type="button"
+              className={`button ${coverageOpen ? "primary" : "ghost"}`}
+              onClick={() => { setAlertsOpen(false); setCoverageOpen((o) => !o); }}
+              disabled={!apiKeySet}
+              title="Uporedi koje kladionice imaju koje mečeve u ponudi"
+            >
+              Pokrivenost
+            </button>
+            <label className="auto">
+              Auto
+              <select value={autoSeconds} onChange={(e) => setAutoSeconds(Number(e.target.value))}>
+                {AUTO_OPTIONS.map((m) => <option key={m} value={m}>{fmtAuto(m)}</option>)}
               </select>
             </label>
-          )}
-        </div>
-
-        <div className="status">
-          {cur?.fetchedAt && (
-            <span title={cur.mode === "delta" ? "Delta osvežavanje: preuzete samo promene" : "Pun snapshot"}>
-              <i className={`dot${curLoading ? " busy" : ""}`} />
-              {clockFmt.format(new Date(cur.fetchedAt))}
-              <em>{cur.mode === "delta" ? `Δ ${cur.changed} promena` : "pun snapshot"}</em>
-            </span>
-          )}
-          {cur?.book && (
-            <span
-              className={cur.book.error ? "status-error" : ""}
-              title={cur.book.error || `${activeBookie.label} ponuda: upareni mečevi / mečevi ovih takmičenja u ponudi`}
-            >
-              {activeBookie.short} {cur.book.fetchedAt ? clockFmt.format(new Date(cur.book.fetchedAt)) : "—"}
-              <em>upareno {cur.book.paired}/{cur.book.offered}</em>
-              {cur.book.error && <em>· greška</em>}
-            </span>
-          )}
-        </div>
-
-        <div className="actions">
-          <button
-            type="button"
-            className="button ghost"
-            onClick={toggleTheme}
-            title={theme === "dark" ? "Svetla tema" : "Tamna tema"}
-          >
-            {theme === "dark" ? "☀" : "☾"}
-          </button>
-          {pwa.canInstall && (
-            <button type="button" className="button ghost" onClick={pwa.install} title="Instaliraj Odds Monitor kao aplikaciju">
-              ⤓ Instaliraj
+            <button type="button" className="button primary" onClick={() => reload("refresh")} disabled={!apiKeySet || curLoading}>
+              ↻ Osveži
             </button>
-          )}
-          <label className="auto">
-            Auto
-            <select value={autoSeconds} onChange={(e) => setAutoSeconds(Number(e.target.value))}>
-              {AUTO_OPTIONS.map((m) => <option key={m} value={m}>{fmtAuto(m)}</option>)}
-            </select>
-          </label>
-          <button type="button" className="button primary" onClick={() => reload("refresh")} disabled={!apiKeySet || curLoading}>
-            ↻ Osveži
-          </button>
-          <button
-            type="button"
-            className="button ghost"
-            onClick={() => reload("full")}
-            disabled={!apiKeySet || curLoading}
-            title="Preuzmi kompletan snapshot umesto samo promena"
-          >
-            Pun reload
-          </button>
-        </div>
-      </header>
-
-      {(!pwa.online || cur?.__cachedAt || serverDown) && (
-        <div className="offline-banner" role="status">
-          {!pwa.online ? "Offline." : "Server nije dostupan."}{" "}
-          {cur?.__cachedAt
-            ? `Prikazane su poslednje sačuvane kvote${
-                Number.isNaN(new Date(cur.__cachedAt).getTime()) ? "" : ` (${clockFmt.format(new Date(cur.__cachedAt))})`
-              } — nisu žive.`
-            : "Kvote se ne mogu osvežiti dok veza ne proradi."}{" "}
-          Ponovo pokušavam automatski.
-          <button type="button" className="button small" onClick={() => window.location.reload()}>Osveži stranu</button>
-        </div>
-      )}
-
-      {apiKeySet === false && <KeyPanel onSaved={() => { setApiKeySet(true); bb.reset(); tn.reset(); hk.reset(); mm.reset(); hb.reset(); reload("full"); }} />}
-
-      {apiKeySet && alertsOpen && (
-        <div className="shell">
-          <SideMenu sport="" onSport={pickSport} sportCounts={menuCounts} searching={searching} alerts={alertsTab} valueTab={valueTab} />
-          <div className="content">
-        <div className="segmented view-switch">
-          <button type="button" className={alertsPage === "drops" ? "active" : ""} onClick={() => setAlertsPage("drops")}>Padovi</button>
-          <button type="button" className={alertsPage === "clv" ? "active" : ""} onClick={() => setAlertsPage("clv")}>CLV</button>
-        </div>
-        {alertsPage === "clv" ? <ClvPage /> : <AlertsPage
-          alerts={drops.alerts}
-          threshold={dropPct}
-          setThreshold={setDropPct}
-          notify={dropAlerts}
-          setNotify={setDropAlerts}
-          edgeOnly={dropEdge}
-          setEdgeOnly={setDropEdge}
-          stream={drops.stream}
-          onClear={drops.clear}
-          onOpen={openAlert}
-        />}
+            <button
+              type="button"
+              className="button ghost"
+              onClick={() => reload("full")}
+              disabled={!apiKeySet || curLoading}
+              title="Preuzmi kompletan snapshot umesto samo promena"
+            >
+              Pun reload
+            </button>
           </div>
-        </div>
-      )}
+        </header>
 
-      {apiKeySet && !alertsOpen && pane && (
-        <SportPane
-          key={sport}
-          board={pane.board}
-          error={pane.error}
-          loading={pane.loading}
-          dayFilter={dayFilter}
-          setDayFilter={setDayFilter}
-          query={query}
-          searchBox={searchBox}
-          sport={sport}
-          onSport={pickSport}
-          alertsTab={alertsTab}
-          valueTab={valueTab}
-          sportCounts={menuCounts}
-          searching={searching}
-          setCallsToday={setCallsToday}
-          openReq={paneOpen}
-        />
-      )}
+        {(!pwa.online || cur?.__cachedAt || serverDown) && (
+          <div className="offline-banner" role="status">
+            {!pwa.online ? "Offline." : "Server nije dostupan."}{" "}
+            {cur?.__cachedAt
+              ? `Prikazane su poslednje sačuvane kvote${Number.isNaN(new Date(cur.__cachedAt).getTime()) ? "" : ` (${clockFmt.format(new Date(cur.__cachedAt))})`
+              } — nisu žive.`
+              : "Kvote se ne mogu osvežiti dok veza ne proradi."}{" "}
+            Ponovo pokušavam automatski.
+            <button type="button" className="button small" onClick={() => window.location.reload()}>Osveži stranu</button>
+          </div>
+        )}
 
-      {apiKeySet && !alertsOpen && allValue && (
-        <AllValuePane
-          boards={boards}
-          errors={{ football: error, basketball: bb.error, tennis: tn.error, hockey: hk.error, mma: mm.error, handball: hb.error }}
-          dayFilter={dayFilter}
-          setDayFilter={setDayFilter}
-          query={query}
-          searchBox={searchBox}
-          onSport={pickSport}
-          alertsTab={alertsTab}
-          valueTab={valueTab}
-          sportCounts={menuCounts}
-          searching={searching}
-          setCallsToday={setCallsToday}
-        />
-      )}
+        {apiKeySet === false && <KeyPanel onSaved={() => { setApiKeySet(true); bb.reset(); tn.reset(); hk.reset(); mm.reset(); hb.reset(); reload("full"); }} />}
 
-      {apiKeySet && !alertsOpen && !twoWay && (
-        <>
+        {apiKeySet && coverageOpen && (
+          <CoveragePage initialSport={sport} onClose={() => setCoverageOpen(false)} />
+        )}
+
+        {apiKeySet && !coverageOpen && alertsOpen && (
           <div className="shell">
-            <SideMenu
-              sport={sport}
-              onSport={pickSport}
-              alerts={alertsTab}
-              valueTab={valueTab}
-              sportCounts={menuCounts}
-              searching={searching}
-              groups={menuGroups}
-              all={allItem}
-              onPick={(item) => (view === "value"
-                ? setValueLeague((cur) => (item.id == null || cur === String(item.id) ? "all" : String(item.id)))
-                : setCompetition(item.key))}
-              label={view === "value" ? "Value po takmičenjima" : "Takmičenja"}
-            />
+            <SideMenu sport="" onSport={pickSport} sportCounts={menuCounts} searching={searching} alerts={alertsTab} valueTab={valueTab} />
             <div className="content">
-            <div className="filters">
               <div className="segmented view-switch">
-                <button type="button" className={view === "compare" ? "active" : ""} onClick={() => setView("compare")}>
-                  {activeBookie.label} vs Pinnacle
-                </button>
-                <button
-                  type="button"
-                  className={view === "value" ? "active" : ""}
-                  onClick={() => setView("value")}
-                  title={`${valueList.length} ishoda gde je ${activeBookie.short} > Pinnacle, od toga ${fairValueCount} gde je ${activeBookie.short} ≥ fer`}
-                >
-                  Value <span className="view-count">{fairValueCount}/{valueList.length}</span>
-                </button>
-                <button
-                  type="button"
-                  className={view === "missing" ? "active" : ""}
-                  onClick={() => setView("missing")}
-                  title={`Mečevi koje Pinnacle ima, a ${activeBookie.label} nema`}
-                >
-                  Nedostaju <span className="view-count">{missingTotal}</span>
-                </button>
-                <button
-                  type="button"
-                  className={view === "suspended" ? "active" : ""}
-                  onClick={() => setView("suspended")}
-                  title="Mečevi kojima je Pinnacle imao kvotu, a sada je nema"
-                >
-                  Suspended <span className="view-count">{board?.suspended?.length || 0}</span>
-                </button>
+                <button type="button" className={alertsPage === "drops" ? "active" : ""} onClick={() => setAlertsPage("drops")}>Padovi</button>
+                <button type="button" className={alertsPage === "clv" ? "active" : ""} onClick={() => setAlertsPage("clv")}>CLV</button>
               </div>
-              {view === "value" && (
-                <>
+              {alertsPage === "clv" ? <ClvPage /> : <AlertsPage
+                alerts={drops.alerts}
+                threshold={dropPct}
+                setThreshold={setDropPct}
+                notify={dropAlerts}
+                setNotify={setDropAlerts}
+                edgeOnly={dropEdge}
+                setEdgeOnly={setDropEdge}
+                stream={drops.stream}
+                onClear={drops.clear}
+                onOpen={openAlert}
+              />}
+            </div>
+          </div>
+        )}
+
+        {apiKeySet && !coverageOpen && !alertsOpen && pane && (
+          <SportPane
+            key={sport}
+            board={pane.board}
+            error={pane.error}
+            loading={pane.loading}
+            dayFilter={dayFilter}
+            setDayFilter={setDayFilter}
+            query={query}
+            searchBox={searchBox}
+            sport={sport}
+            onSport={pickSport}
+            alertsTab={alertsTab}
+            valueTab={valueTab}
+            sportCounts={menuCounts}
+            searching={searching}
+            setCallsToday={setCallsToday}
+            openReq={paneOpen}
+          />
+        )}
+
+        {apiKeySet && !coverageOpen && !alertsOpen && allValue && (
+          <AllValuePane
+            boards={boards}
+            errors={{ football: error, basketball: bb.error, tennis: tn.error, hockey: hk.error, mma: mm.error, handball: hb.error }}
+            dayFilter={dayFilter}
+            setDayFilter={setDayFilter}
+            query={query}
+            searchBox={searchBox}
+            onSport={pickSport}
+            alertsTab={alertsTab}
+            valueTab={valueTab}
+            sportCounts={menuCounts}
+            searching={searching}
+            setCallsToday={setCallsToday}
+          />
+        )}
+
+        {apiKeySet && !coverageOpen && !alertsOpen && !twoWay && (
+          <>
+            <div className="shell">
+              <SideMenu
+                sport={sport}
+                onSport={pickSport}
+                alerts={alertsTab}
+                valueTab={valueTab}
+                sportCounts={menuCounts}
+                searching={searching}
+                groups={menuGroups}
+                all={allItem}
+                onPick={(item) => (view === "value"
+                  ? setValueLeague((cur) => (item.id == null || cur === String(item.id) ? "all" : String(item.id)))
+                  : setCompetition(item.key))}
+                label={view === "value" ? "Value po takmičenjima" : "Takmičenja"}
+              />
+              <div className="content">
+                <div className="filters">
+                  <div className="segmented view-switch">
+                    <button type="button" className={view === "compare" ? "active" : ""} onClick={() => setView("compare")}>
+                      {activeBookie.label} vs Pinnacle
+                    </button>
+                    <button
+                      type="button"
+                      className={view === "value" ? "active" : ""}
+                      onClick={() => setView("value")}
+                      title={`${valueList.length} ishoda gde je ${activeBookie.short} > Pinnacle, od toga ${fairValueCount} gde je ${activeBookie.short} ≥ fer`}
+                    >
+                      Value <span className="view-count">{fairValueCount}/{valueList.length}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={view === "missing" ? "active" : ""}
+                      onClick={() => setView("missing")}
+                      title={`Mečevi koje Pinnacle ima, a ${activeBookie.label} nema`}
+                    >
+                      Nedostaju <span className="view-count">{missingTotal}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={view === "suspended" ? "active" : ""}
+                      onClick={() => setView("suspended")}
+                      title="Mečevi kojima je Pinnacle imao kvotu, a sada je nema"
+                    >
+                      Suspended <span className="view-count">{board?.suspended?.length || 0}</span>
+                    </button>
+                  </div>
+                  {view === "value" && (
+                    <>
+                      <div className="segmented">
+                        {VALUE_LEVELS.map(([key, label]) => (
+                          <button key={key} type="button" className={valueLevel === key ? "active" : ""} onClick={() => setValueLevel(key)}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="auto">
+                        Tržište
+                        <select value={valueGroup} onChange={(e) => setValueGroup(e.target.value)}>
+                          {VALUE_GROUPS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                        </select>
+                      </label>
+                      <ValueRange min={evMin} max={evMax} setMin={setEvMin} setMax={setEvMax} topOnly={topOnly} setTopOnly={setTopOnly} />
+                    </>
+                  )}
+                  {view === "compare" && (
+                    <label className="auto">
+                      Odstupanje
+                      <select value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
+                        <option value="all">svi mečevi</option>
+                        <option value="paired">upareni</option>
+                        <option value="-0.02">najveće ≥ −2%</option>
+                        <option value="0">najveće ≥ 0%</option>
+                        <option value="0.02">najveće ≥ +2%</option>
+                        <option value="missing">nije u ponudi {activeBookie.short}</option>
+                      </select>
+                    </label>
+                  )}
                   <div className="segmented">
-                    {VALUE_LEVELS.map(([key, label]) => (
-                      <button key={key} type="button" className={valueLevel === key ? "active" : ""} onClick={() => setValueLevel(key)}>
+                    {DAY_FILTERS.map(([key, label]) => (
+                      <button key={key} type="button" className={dayFilter === key ? "active" : ""} onClick={() => setDayFilter(key)}>
                         {label}
                       </button>
                     ))}
                   </div>
-                  <label className="auto">
-                    Tržište
-                    <select value={valueGroup} onChange={(e) => setValueGroup(e.target.value)}>
-                      {VALUE_GROUPS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-                    </select>
-                  </label>
-                  <ValueRange min={evMin} max={evMax} setMin={setEvMin} setMax={setEvMax} topOnly={topOnly} setTopOnly={setTopOnly} />
-                </>
-              )}
-              {view === "compare" && (
-                <label className="auto">
-                  Odstupanje
-                  <select value={edgeFilter} onChange={(e) => setEdgeFilter(e.target.value)}>
-                    <option value="all">svi mečevi</option>
-                    <option value="paired">upareni</option>
-                    <option value="-0.02">najveće ≥ −2%</option>
-                    <option value="0">najveće ≥ 0%</option>
-                    <option value="0.02">najveće ≥ +2%</option>
-                    <option value="missing">nije u ponudi {activeBookie.short}</option>
-                  </select>
-                </label>
-              )}
-              <div className="segmented">
-                {DAY_FILTERS.map(([key, label]) => (
-                  <button key={key} type="button" className={dayFilter === key ? "active" : ""} onClick={() => setDayFilter(key)}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {searchBox}
-              {view === "pinnacle" ? (
-                <span className="legend">
-                  <span className="price up"><span className="price-odds">▲</span></span> kvota raste
-                  <span className="price down"><span className="price-odds">▼</span></span> kvota pada
-                  <span className="legend-fair">sivo = fer kvota (bez marže)</span>
-                </span>
-              ) : (
-                <span className="legend mc-legend">
-                  <span className="mc-cell book-fair">{activeBookie.short} ≥ fer</span>
-                  <span className="mc-cell book-above">{activeBookie.short} &gt; Pinnacle</span>
-                  {view === "compare" && (
-                    <>
-                      <span className="mc-cell book-moved" title="Promena pri poslednjem osvežavanju">{activeBookie.short} promena</span>
-                      <span className="mc-cell pin-up" title="Promena pri poslednjem osvežavanju">PIN raste</span>
-                      <span className="mc-cell pin-down" title="Promena pri poslednjem osvežavanju">PIN pada</span>
-                    </>
+                  {searchBox}
+                  {view === "pinnacle" ? (
+                    <span className="legend">
+                      <span className="price up"><span className="price-odds">▲</span></span> kvota raste
+                      <span className="price down"><span className="price-odds">▼</span></span> kvota pada
+                      <span className="legend-fair">sivo = fer kvota (bez marže)</span>
+                    </span>
+                  ) : (
+                    <span className="legend mc-legend">
+                      <span className="mc-cell book-fair">{activeBookie.short} ≥ fer</span>
+                      <span className="mc-cell book-above">{activeBookie.short} &gt; Pinnacle</span>
+                      {view === "compare" && (
+                        <>
+                          <span className="mc-cell book-moved" title="Promena pri poslednjem osvežavanju">{activeBookie.short} promena</span>
+                          <span className="mc-cell pin-up" title="Promena pri poslednjem osvežavanju">PIN raste</span>
+                          <span className="mc-cell pin-down" title="Promena pri poslednjem osvežavanju">PIN pada</span>
+                        </>
+                      )}
+                    </span>
                   )}
-                </span>
-              )}
-            </div>
+                </div>
 
-            <main className={`workspace${selectedId ? " with-detail" : ""}`}>
-              <section className="board-wrap">
-                {error && <p className="state error" role="alert">{error}</p>}
-                {!board && loading && <p className="state">Učitavam ponudu…</p>}
-                {board && view !== "value" && view !== "suspended" && !filtered.length && (
-                  <p className="state">
-                    {view === "missing" ? missingEmpty(missingTotal, competition !== "all", () => setCompetition("all")) : "Nema mečeva za izabrani filter."}
-                  </p>
-                )}
-                {view === "suspended" && (board?.suspended?.length
-                  ? <SuspendedTable matches={board.suspended} />
-                  : <p className="state">Nijedan meč nije izgubio Pinnacle kvotu od pokretanja servera.</p>)}
-                {view === "missing" && <OtherOffered leagues={board?.otherOffered} />}
-                {!!filtered.length && view === "missing" && (
-                  <MissingTable matches={filtered} competitions={allCompetitions} sport="football" />
-                )}
-                {!!filtered.length && view === "compare" && (
-                  <CompareTable
-                    matches={filtered}
-                    pinStamp={board.fetchedAt}
-                    bookStamp={board.book?.fetchedAt}
-                    selectedId={oddsId}
-                    onOdds={setOddsId}
-                    onSelect={setOddsId}
+                <main className={`workspace${selectedId ? " with-detail" : ""}`}>
+                  <section className="board-wrap">
+                    {error && <p className="state error" role="alert">{error}</p>}
+                    {!board && loading && <p className="state">Učitavam ponudu…</p>}
+                    {board && view !== "value" && view !== "suspended" && !filtered.length && (
+                      <p className="state">
+                        {view === "missing" ? missingEmpty(missingTotal, competition !== "all", () => setCompetition("all")) : "Nema mečeva za izabrani filter."}
+                      </p>
+                    )}
+                    {view === "suspended" && (board?.suspended?.length
+                      ? <SuspendedTable matches={board.suspended} />
+                      : <p className="state">Nijedan meč nije izgubio Pinnacle kvotu od pokretanja servera.</p>)}
+                    {view === "missing" && <OtherOffered leagues={board?.otherOffered} />}
+                    {!!filtered.length && view === "missing" && (
+                      <MissingTable matches={filtered} competitions={allCompetitions} sport="football" />
+                    )}
+                    {!!filtered.length && view === "compare" && (
+                      <CompareTable
+                        matches={filtered}
+                        pinStamp={board.fetchedAt}
+                        bookStamp={board.book?.fetchedAt}
+                        selectedId={oddsId}
+                        onOdds={setOddsId}
+                        onSelect={setOddsId}
+                      />
+                    )}
+                    {board && view === "value" && !shownValues.length && (
+                      <p className="state">Nema ishoda za izabrane filtere.</p>
+                    )}
+                    {board && view === "value" && !!shownValues.length && (
+                      <ValueTable
+                        sport="football"
+                        values={shownValues}
+                        matchesById={matchesById}
+                        competitions={competitions}
+                        selectedId={oddsId}
+                        onOdds={setOddsId}
+                        onSelect={setOddsId}
+                      />
+                    )}
+                    {!!filtered.length && view === "pinnacle" && (
+                      <BoardTable
+                        groups={groups}
+                        competitions={competitions}
+                        selectedId={selectedId}
+                        fetchedAt={board.fetchedAt}
+                        onSelect={(id) => setSelectedId((current) => (current === id ? "" : id))}
+                        showLeague={competition === "all"}
+                      />
+                    )}
+                  </section>
+                  {selectedId && (
+                    <DetailPanel
+                      key={selectedId}
+                      matchId={selectedId}
+                      boardMatch={selectedMatch}
+                      competition={selectedMatch ? compById.get(selectedMatch.leagueId) : null}
+                      onClose={() => setSelectedId("")}
+                      onCalls={onCalls}
+                    />
+                  )}
+                </main>
+                {oddsId && (
+                  <OddsModal
+                    key={oddsId}
+                    matchId={oddsId}
+                    boardMatch={matchesById.get(Number(oddsId)) || matchesById.get(oddsId)}
+                    onClose={() => setOddsId("")}
+                    onCalls={onCalls}
                   />
                 )}
-                {board && view === "value" && !shownValues.length && (
-                  <p className="state">Nema ishoda za izabrane filtere.</p>
-                )}
-                {board && view === "value" && !!shownValues.length && (
-                  <ValueTable
-                    sport="football"
-                    values={shownValues}
-                    matchesById={matchesById}
-                    competitions={competitions}
-                    selectedId={oddsId}
-                    onOdds={setOddsId}
-                    onSelect={setOddsId}
-                  />
-                )}
-                {!!filtered.length && view === "pinnacle" && (
-                  <BoardTable
-                    groups={groups}
-                    competitions={competitions}
-                    selectedId={selectedId}
-                    fetchedAt={board.fetchedAt}
-                    onSelect={(id) => setSelectedId((current) => (current === id ? "" : id))}
-                    showLeague={competition === "all"}
-                  />
-                )}
-              </section>
-              {selectedId && (
-                <DetailPanel
-                  key={selectedId}
-                  matchId={selectedId}
-                  boardMatch={selectedMatch}
-                  competition={selectedMatch ? compById.get(selectedMatch.leagueId) : null}
-                  onClose={() => setSelectedId("")}
-                  onCalls={onCalls}
-                />
-              )}
-            </main>
-            {oddsId && (
-              <OddsModal
-                key={oddsId}
-                matchId={oddsId}
-                boardMatch={matchesById.get(Number(oddsId)) || matchesById.get(oddsId)}
-                onClose={() => setOddsId("")}
-                onCalls={onCalls}
-              />
-            )}
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
 
-      {drops.toasts.length > 0 && !alertsOpen && !selectedId && !oddsId && (
-        <div className="drop-alerts" role="alert">
-          <button type="button" className="button drop-clear" onClick={() => drops.dismiss()}>
-            Obriši sve ({drops.toasts.length})
-          </button>
-          {drops.toasts.slice(0, 3).map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className={`drop-alert${a.bookEv > 0 ? " edge" : ""}`}
-              onClick={() => { drops.dismiss(a.id); openAlert(a); }}
-              title="Klik za zatvaranje"
-            >
-              <b>▼ {a.match}</b>
-              <span>
-                {a.market}{a.line} {a.side}: {fmtOdds(a.from)} → {fmtOdds(a.to)} (−{a.pct.toFixed(1)}%)
-                {a.book != null
-                  ? ` · ${activeBookie.label} ${fmtOdds(a.book)}, prednost ${fmtEv(a.bookEv)}`
-                  : a.nvp ? ` · fer ${fmtOdds(a.nvp)}` : ""}
-              </span>
+        {drops.toasts.length > 0 && !alertsOpen && !selectedId && !oddsId && (
+          <div className="drop-alerts" role="alert">
+            <button type="button" className="button drop-clear" onClick={() => drops.dismiss()}>
+              Obriši sve ({drops.toasts.length})
             </button>
-          ))}
-        </div>
-      )}
+            {drops.toasts.slice(0, 3).map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                className={`drop-alert${a.bookEv > 0 ? " edge" : ""}`}
+                onClick={() => { drops.dismiss(a.id); openAlert(a); }}
+                title="Klik za zatvaranje"
+              >
+                <b>▼ {a.match}</b>
+                <span>
+                  {a.market}{a.line} {a.side}: {fmtOdds(a.from)} → {fmtOdds(a.to)} (−{a.pct.toFixed(1)}%)
+                  {a.book != null
+                    ? ` · ${activeBookie.label} ${fmtOdds(a.book)}, prednost ${fmtEv(a.bookEv)}`
+                    : a.nvp ? ` · fer ${fmtOdds(a.nvp)}` : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
 
-      <footer>Kvote: Pinnacle preko PinnWire · Kvote se mogu promeniti u svakom trenutku.</footer>
-    </div>
+        <footer>Kvote: Pinnacle preko PinnWire · Kvote se mogu promeniti u svakom trenutku.</footer>
+      </div>
     </BookieContext.Provider>
   );
 }

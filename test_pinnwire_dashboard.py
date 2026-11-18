@@ -1939,6 +1939,11 @@ class BookieAdapterTests(unittest.TestCase):
         self.assertIsInstance(maxbet, bookie_adapter.MaxBetAdapter)
         self.assertEqual((maxbet.label, maxbet.short, maxbet._api("football").base),
                          ("MaxBet", "MB", "https://www.maxbet.rs"))
+        tn_row = {"odds": {"50538": 1.70, "50539": 2.10, "251": 1.68, "253": 2.10},
+                  "params": {"hd2": "1.5", "handicapGames": "3.5"}}
+        tn_dec = maxbet.decode_markets("tennis", tn_row, "ft")
+        self.assertEqual(tn_dec["setspreads"], {-1.5: {"home": 1.70, "away": 2.10}})
+        self.assertEqual(tn_dec["spreads"], {-3.5: {"home": 1.68, "away": 2.10}})
         self.assertIsInstance(bookie_adapter.get_adapter("example"), bookie_example.ExampleBookieAdapter)
         self.assertIsInstance(
             bookie_adapter.get_adapter(config_loader=lambda: {"bookie": "example"}),

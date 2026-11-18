@@ -183,7 +183,10 @@ class MmaState(bb.BasketballState):
         return shape_match(event, hit, decode=self.decode_markets)
 
     def pair(self, events, offer):
-        return pair_events(events, offer, is_prematch=self.is_prematch)
+        return self.pair_for(events, offer, self.bookie)
+
+    def pair_for(self, events, offer, bookie):
+        return pair_events(events, offer, is_prematch=bookie.is_prematch)
 
     def hints(self, events, offer, pairs):
         return unpaired_hints(events, offer, pairs, is_prematch=self.is_prematch)

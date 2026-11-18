@@ -1093,3 +1093,16 @@ td.mc-line { width: 56px; background: var(--mc-max-bg); color: var(--mc-max-ink)
 .comp-badge.norehl { --badge: #ba0c2f; }
 .comp-badge.nor1dh { --badge: #00205b; }
 .comp-badge.intfrw { --badge: #8e44ad; }
+
+/* ---------------------------------------------------------------- bookie coverage */
+.coverage-page { padding-bottom: 24px; }
+.coverage-chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; }
+.coverage-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 12px; color: var(--muted);
+}
+.coverage-chip b { color: var(--text); }
+.coverage-chip.active { border-color: var(--accent); background: var(--select); }
+.coverage-chip.err { border-color: var(--down); color: var(--down); }
+.coverage-table .cov-col, .coverage-table .cov-cell { text-align: center; min-width: 52px; }
+.cov-yes { color: var(--up); font-weight: 700; font-size: 14px; }

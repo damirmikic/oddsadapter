@@ -18,6 +18,7 @@ import threading
 import time
 import webbrowser
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
@@ -527,6 +528,10 @@ class DashboardState(common.SnapshotState):
     def comp_id(self, row):
         return self.bookie.comp_id("football", row)
 
+    def pair_for(self, events, offer, bookie):
+        return pair_events(events, offer, comp_fn=lambda r: bookie.comp_id("football", r),
+                           is_prematch=bookie.is_prematch, by_comp=bookie.pair_by_comp)
+
     def merged(self, incoming, stamp):
         """Opening and previous 1X2 prices of the tracked events this fetch changed."""
         tracked = {k for k, e in self.events.items() if is_tracked(e)}
@@ -969,6 +974,77 @@ def drops_response(query):
     return {"drops": out, "stream": DROPS.status(), "callsToday": STATE.history.calls_today()}
 
 
+COVERAGE_CACHES = {}
+COVERAGE_LOCK = threading.Lock()
+
+
+def _coverage_cache(bookie, sport):
+    key = (bookie.name, sport)
+    with COVERAGE_LOCK:
+        cache = COVERAGE_CACHES.get(key)
+        if cache is None:
+            cache = bk.OfferCache(bookie.sport_api(sport))
+            COVERAGE_CACHES[key] = cache
+        return cache
+
+
+def coverage_response(query):
+    """Compare which bookies carry each upcoming tracked PinnWire match for one sport (presence only)."""
+    sport = (query.get("sport") or ["football"])[0]
+    refresh = query.get("refresh") == ["1"]
+    state = SPORT_STATES.get(sport)
+    if state is None:
+        raise LookupError(f"Nepoznat sport: {sport!r}")
+    if state.events is None:
+        state.refresh(if_empty=True)
+    with state.lock:
+        now = utc_now()
+        upcoming = [e for e in (state.events or {}).values() if is_upcoming(e, now)]
+    if sport == "football":
+        events = [clean_ah0(e) for e in upcoming if is_tracked(e)]
+        events = [e for e in events if common.has_prices(e)]
+    else:
+        events = [e for e in upcoming if state.complete(e) and state.tracked(e) and common.has_prices(e)]
+    events.sort(key=lambda e: (common.starts(e), e.get("home", "")))
+
+    catalog = bookie_adapter.adapter_catalog()
+
+    def check_one(entry):
+        adapter = STATE.bookie if entry["name"] == STATE.bookie.name else bookie_adapter.get_adapter(entry["name"])
+        cache = state.book_cache if entry["name"] == STATE.bookie.name else _coverage_cache(adapter, sport)
+        offer = cache.get(refresh=refresh, stamp_fn=utc_stamp)
+        pairs = state.pair_for(events, offer, adapter) if not cache.error or offer else {}
+        offered = sum(1 for r in offer if (not adapter.pair_by_comp or adapter.comp_id(sport, r) is not None)
+                      and adapter.is_prematch(r))
+        return {
+            **entry,
+            "offered": offered,
+            "paired": len(pairs),
+            "error": cache.error,
+            "fetchedAt": cache.stamp,
+        }, set(pairs.keys())
+
+    with ThreadPoolExecutor(max_workers=max(1, len(catalog))) as pool:
+        results = list(pool.map(check_one, catalog))
+
+    bookies_summary = [summary_entry for summary_entry, _ in results]
+    paired_by_bookie = {summary_entry["name"]: keys for summary_entry, keys in results}
+    matches = []
+    for e in events:
+        eid = str(e["event_id"])
+        avail = [b["name"] for b in bookies_summary if eid in paired_by_bookie[b["name"]]]
+        matches.append({
+            "id": e["event_id"],
+            "home": e.get("home", ""),
+            "away": e.get("away", ""),
+            "leagueId": e.get("league_id"),
+            "leagueName": e.get("league_name") or "",
+            "starts": common.starts(e),
+            "available": avail,
+        })
+    return {"sport": sport, "fetchedAt": utc_stamp(), "bookies": bookies_summary, "matches": matches}
+
+
 # /api/board, /api/match/<id>, /api/<sport>/board, /api/<sport>/match/<id>
 SPORT_ROUTE = re.compile(r"/api/(?:(basketball|tennis|hockey|mma|handball)/)?(board|match/(.*))")
 
@@ -1033,6 +1109,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(200, drops_response(query))
             if path == "/api/marks":
                 return self.send_json(200, {"marks": marks_store().all()})
+            if path == "/api/coverage":
+                return self.send_json(200, coverage_response(query))
             route = SPORT_ROUTE.fullmatch(path)
             if route:
                 sport, endpoint, event_id = route.group(1) or "football", route.group(2), route.group(3)

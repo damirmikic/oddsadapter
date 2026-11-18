@@ -171,6 +171,7 @@ class FeedBookieAdapter(BookieAdapter):
     label = "Bookie"
     short = "BK"
     base = bk.BASE
+    invert_tennis_spreads = False
 
     _OFFER_PATHS = {
         "football": bk.OFFER_PATH,
@@ -233,7 +234,14 @@ class FeedBookieAdapter(BookieAdapter):
         if sport == "tennis":
             import tennis
 
-            return tennis.book_markets(row, period or "ft")
+            decoded = tennis.book_markets(row, period or "ft")
+            if self.invert_tennis_spreads and (period or "ft") == "ft":
+                decoded = {
+                    **decoded,
+                    "setspreads": {-line: prices for line, prices in decoded["setspreads"].items()},
+                    "spreads": {-line: prices for line, prices in decoded["spreads"].items()},
+                }
+            return decoded
         if sport == "hockey":
             import hockey
 
@@ -258,6 +266,7 @@ class MaxBetAdapter(FeedBookieAdapter):
     label = "MaxBet"
     short = "MB"
     base = "https://www.maxbet.rs"
+    invert_tennis_spreads = True
 
 
 def register_feed_bookie(name, label, short, base, aliases=()):

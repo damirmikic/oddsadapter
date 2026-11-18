@@ -545,8 +545,12 @@ class BasketballState(common.SnapshotState):
         return shape_match(event, hit, decode=self.decode_markets)
 
     def pair(self, events, offer):
+        return self.pair_for(events, offer, self.bookie)
+
+    def pair_for(self, events, offer, bookie):
         return pair_events(events, offer, self.book_comp, self.score_fn,
-                           comp_fn=self.comp_id, is_prematch=self.is_prematch, by_comp=self.bookie.pair_by_comp)
+                           comp_fn=lambda r: bookie.comp_id(self.clv_name, r),
+                           is_prematch=bookie.is_prematch, by_comp=bookie.pair_by_comp)
 
     def hints(self, events, offer, pairs):
         return unpaired_hints(events, offer, pairs, self.book_comp, self.score_fn,
